@@ -27,7 +27,7 @@ detect() {
 }
 
 download() {
-    DOWNLOAD_URL="https://github.com/alibaba/loongsuite-go-agent/releases/latest/download/otel-${CURRENT_OS}-${CURRENT_ARCH}"
+    DOWNLOAD_URL="https://github.com/urbanindo/opentelemetry-go-auto-instrumentation/releases/download/v0.1.6/otel-${CURRENT_OS}-${CURRENT_ARCH}"
     EXECUTABLE="otel"
 
     echo "Downloading from $DOWNLOAD_URL"
@@ -47,8 +47,8 @@ install() {
         exit 1
     fi
     echo "Installing $EXECUTABLE to $INSTALL_DIR"
-    sudo mv "$EXECUTABLE" "$INSTALL_DIR/"
-    sudo chmod +x "$INSTALL_DIR/$EXECUTABLE"
+    mv "$EXECUTABLE" "$INSTALL_DIR/"
+    chmod +x "$INSTALL_DIR/$EXECUTABLE"
 
     echo "Installation completed. You can run it using: $INSTALL_DIR/$EXECUTABLE"
 }
