@@ -21,10 +21,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/alibaba/loongsuite-go-agent/pkg/testaccess"
 	"github.com/mohae/deepcopy"
-	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
-	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
@@ -78,7 +77,7 @@ func waitForMetrics() (metricdata.ResourceMetrics, error) {
 			finish = true
 		default:
 			time.Sleep(500 * time.Millisecond)
-			mi, err := metric.GetTestMetrics()
+			mi, err := testaccess.GetTestMetrics()
 			mrs = mi.(metricdata.ResourceMetrics)
 			if err == nil {
 				finish = true
@@ -110,7 +109,7 @@ func filterMetricByName(data metricdata.ResourceMetrics, name string) (metricdat
 }
 
 func waitForTraces(numberOfTraces int) []tracetest.SpanStubs {
-	defer trace.ResetTestSpans()
+	defer testaccess.ResetTestSpans()
 	finish := false
 	var traces []tracetest.SpanStubs
 	timeout := time.After(20 * time.Second)
@@ -135,7 +134,7 @@ func waitForTraces(numberOfTraces int) []tracetest.SpanStubs {
 }
 
 func groupAndSortTrace() []tracetest.SpanStubs {
-	spansi := trace.GetTestSpans()
+	spansi := testaccess.GetTestSpans()
 	spans := spansi.(*tracetest.SpanStubs)
 	traceMap := make(map[string][]tracetest.SpanStub)
 	for _, span := range *spans {

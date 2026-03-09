@@ -23,24 +23,11 @@ import (
 	"github.com/dave/dst"
 )
 
-const (
-	IdentNil    = "nil"
-	IdentTrue   = "true"
-	IdentFalse  = "false"
-	IdentIgnore = "_"
-)
-
-// AST Construction
-func AddressOf(expr dst.Expr) *dst.UnaryExpr {
-	return &dst.UnaryExpr{Op: token.AND, X: dst.Clone(expr).(dst.Expr)}
-}
-
-func CallTo(name string, args []dst.Expr) *dst.CallExpr {
-	return &dst.CallExpr{
-		Fun:  &dst.Ident{Name: name},
-		Args: args,
-	}
-}
+// -----------------------------------------------------------------------------
+// AST Shared Utilities
+//
+// This file contains shared utility functions for AST traversal and manipulation.
+// It provides common operations for finding, filtering, and processing AST nodes
 
 func MakeUnusedIdent(ident *dst.Ident) *dst.Ident {
 	ident.Name = IdentIgnore
@@ -51,96 +38,11 @@ func IsUnusedIdent(ident *dst.Ident) bool {
 	return ident.Name == IdentIgnore
 }
 
-func Ident(name string) *dst.Ident {
-	return &dst.Ident{
-		Name: name,
-	}
-}
-
-func StringLit(value string) *dst.BasicLit {
-	return &dst.BasicLit{
-		Kind:  token.STRING,
-		Value: fmt.Sprintf("%q", value),
-	}
-}
-
 func IsStringLit(expr dst.Expr, val string) bool {
 	lit, ok := expr.(*dst.BasicLit)
 	return ok &&
 		lit.Kind == token.STRING &&
 		lit.Value == fmt.Sprintf("%q", val)
-}
-
-func IntLit(value int) *dst.BasicLit {
-	return &dst.BasicLit{
-		Kind:  token.INT,
-		Value: fmt.Sprintf("%d", value),
-	}
-}
-
-func Block(stmt dst.Stmt) *dst.BlockStmt {
-	return &dst.BlockStmt{
-		List: []dst.Stmt{
-			stmt,
-		},
-	}
-}
-
-func BlockStmts(stmts ...dst.Stmt) *dst.BlockStmt {
-	return &dst.BlockStmt{
-		List: stmts,
-	}
-}
-
-func Exprs(exprs ...dst.Expr) []dst.Expr {
-	return exprs
-}
-
-func Stmts(stmts ...dst.Stmt) []dst.Stmt {
-	return stmts
-}
-
-func SelectorExpr(x dst.Expr, sel string) *dst.SelectorExpr {
-	return &dst.SelectorExpr{
-		X:   dst.Clone(x).(dst.Expr),
-		Sel: Ident(sel),
-	}
-}
-
-func IndexExpr(x dst.Expr, index dst.Expr) *dst.IndexExpr {
-	return &dst.IndexExpr{
-		X:     dst.Clone(x).(dst.Expr),
-		Index: dst.Clone(index).(dst.Expr),
-	}
-}
-
-func TypeAssertExpr(x dst.Expr, typ dst.Expr) *dst.TypeAssertExpr {
-	return &dst.TypeAssertExpr{
-		X:    x,
-		Type: dst.Clone(typ).(dst.Expr),
-	}
-}
-
-func ParenExpr(x dst.Expr) *dst.ParenExpr {
-	return &dst.ParenExpr{
-		X: dst.Clone(x).(dst.Expr),
-	}
-}
-
-func NewField(name string, typ dst.Expr) *dst.Field {
-	newField := &dst.Field{
-		Names: []*dst.Ident{dst.NewIdent(name)},
-		Type:  typ,
-	}
-	return newField
-}
-
-func BoolTrue() *dst.BasicLit {
-	return &dst.BasicLit{Value: IdentTrue}
-}
-
-func BoolFalse() *dst.BasicLit {
-	return &dst.BasicLit{Value: IdentFalse}
 }
 
 func IsInterfaceType(typ dst.Expr) bool {
@@ -151,81 +53,6 @@ func IsInterfaceType(typ dst.Expr) bool {
 func IsEllipsis(typ dst.Expr) bool {
 	_, ok := typ.(*dst.Ellipsis)
 	return ok
-}
-
-func InterfaceType() *dst.InterfaceType {
-	return &dst.InterfaceType{Methods: &dst.FieldList{List: nil}}
-}
-
-func ArrayType(elem dst.Expr) *dst.ArrayType {
-	return &dst.ArrayType{Elt: elem}
-}
-
-func IfStmt(init dst.Stmt, cond dst.Expr,
-	body, elseBody *dst.BlockStmt) *dst.IfStmt {
-	return &dst.IfStmt{
-		Init: dst.Clone(init).(dst.Stmt),
-		Cond: dst.Clone(cond).(dst.Expr),
-		Body: dst.Clone(body).(*dst.BlockStmt),
-		Else: dst.Clone(elseBody).(*dst.BlockStmt),
-	}
-}
-
-func IfNotNilStmt(cond dst.Expr, body, elseBody *dst.BlockStmt) *dst.IfStmt {
-	var elseB dst.Stmt
-	if elseBody == nil {
-		elseB = nil
-	} else {
-		elseB = dst.Clone(elseBody).(dst.Stmt)
-	}
-	return &dst.IfStmt{
-		Cond: &dst.BinaryExpr{
-			X:  dst.Clone(cond).(dst.Expr),
-			Op: token.NEQ,
-			Y:  &dst.Ident{Name: IdentNil},
-		},
-		Body: dst.Clone(body).(*dst.BlockStmt),
-		Else: elseB,
-	}
-}
-
-func EmptyStmt() *dst.EmptyStmt {
-	return &dst.EmptyStmt{}
-}
-
-func ExprStmt(expr dst.Expr) *dst.ExprStmt {
-	return &dst.ExprStmt{X: dst.Clone(expr).(dst.Expr)}
-}
-
-func DeferStmt(call *dst.CallExpr) *dst.DeferStmt {
-	return &dst.DeferStmt{Call: dst.Clone(call).(*dst.CallExpr)}
-}
-
-func ReturnStmt(results []dst.Expr) *dst.ReturnStmt {
-	return &dst.ReturnStmt{Results: results}
-}
-
-func AssignStmt(lhs, rhs dst.Expr) *dst.AssignStmt {
-	return &dst.AssignStmt{
-		Lhs: []dst.Expr{lhs},
-		Tok: token.ASSIGN,
-		Rhs: []dst.Expr{rhs},
-	}
-}
-
-func DefineStmts(lhs, rhs []dst.Expr) *dst.AssignStmt {
-	return &dst.AssignStmt{
-		Lhs: lhs,
-		Tok: token.DEFINE,
-		Rhs: rhs,
-	}
-}
-
-func SwitchCase(list []dst.Expr, stmts []dst.Stmt) *dst.CaseClause {
-	return &dst.CaseClause{
-		List: list,
-		Body: stmts,
-	}
 }
 
 func AddStructField(decl dst.Decl, name string, typ string) {
@@ -297,98 +124,184 @@ func FindImport(root *dst.File, path string) *dst.ImportSpec {
 	return nil
 }
 
-func NewVarDecl(name string, paramTypes *dst.FieldList) *dst.GenDecl {
-	return &dst.GenDecl{
-		Tok: token.VAR,
-		Specs: []dst.Spec{
-			&dst.ValueSpec{
-				Names: []*dst.Ident{
-					{Name: name},
-				},
-				Type: &dst.FuncType{
-					Func:   false,
-					Params: paramTypes,
-				},
-			},
-		},
-	}
-}
-
-func DereferenceOf(expr dst.Expr) dst.Expr {
-	return &dst.StarExpr{X: expr}
-}
-
 func HasReceiver(fn *dst.FuncDecl) bool {
 	return fn.Recv != nil && len(fn.Recv.List) > 0
 }
 
-// AST utilities
+func findFuncDecls(root *dst.File, lambda func(*dst.FuncDecl) bool) []*dst.FuncDecl {
+	funcDecls := ListFuncDecls(root)
 
-func FindFuncDecl(root *dst.File, name string) *dst.FuncDecl {
+	// The function with receiver and the function without receiver may have
+	// the same name, so they need to be classified into the same name
+	found := make([]*dst.FuncDecl, 0)
+	for _, funcDecl := range funcDecls {
+		if lambda(funcDecl) {
+			found = append(found, funcDecl)
+		}
+	}
+	return found
+}
+
+func FindFuncDeclWithoutRecv(root *dst.File, funcName string) *dst.FuncDecl {
+	decls := findFuncDecls(root, func(funcDecl *dst.FuncDecl) bool {
+		return funcDecl.Name.Name == funcName && !HasReceiver(funcDecl)
+	})
+
+	if len(decls) == 0 {
+		return nil
+	}
+	return decls[0]
+}
+
+// stripGenericTypes extracts the base type name from a receiver expression,
+// handling both generic and non-generic types.
+// For example:
+// - *MyStruct -> *MyStruct
+// - MyStruct -> MyStruct
+// - *GenStruct[T] -> *GenStruct
+// - GenStruct[T] -> GenStruct
+func stripGenericTypes(recvTypeExpr dst.Expr) string {
+	switch expr := recvTypeExpr.(type) {
+	case *dst.StarExpr: // func (*Recv)T or func (*Recv[T])T
+		// Check if X is an Ident (non-generic) or IndexExpr/IndexListExpr (generic)
+		switch x := expr.X.(type) {
+		case *dst.Ident:
+			// Non-generic pointer receiver: *MyStruct
+			return "*" + x.Name
+		case *dst.IndexExpr:
+			// Generic pointer receiver with single type param: *GenStruct[T]
+			if baseIdent, ok := x.X.(*dst.Ident); ok {
+				return "*" + baseIdent.Name
+			}
+		case *dst.IndexListExpr:
+			// Generic pointer receiver with multiple type params: *GenStruct[T, U]
+			if baseIdent, ok := x.X.(*dst.Ident); ok {
+				return "*" + baseIdent.Name
+			}
+		}
+	case *dst.Ident: // func (Recv)T
+		return expr.Name
+	case *dst.IndexExpr:
+		// Generic value receiver with single type param: GenStruct[T]
+		if baseIdent, ok := expr.X.(*dst.Ident); ok {
+			return baseIdent.Name
+		}
+	case *dst.IndexListExpr:
+		// Generic value receiver with multiple type params: GenStruct[T, U]
+		if baseIdent, ok := expr.X.(*dst.Ident); ok {
+			return baseIdent.Name
+		}
+	}
+	return ""
+}
+
+func FindFuncDecl(root *dst.File, function string, receiverType string) []*dst.FuncDecl {
+	decls := findFuncDecls(root, func(funcDecl *dst.FuncDecl) bool {
+		return function == funcDecl.Name.Name
+	})
+	if receiverType != "" {
+		filtered := make([]*dst.FuncDecl, 0)
+		for _, funcDecl := range decls {
+			if !HasReceiver(funcDecl) {
+				continue
+			}
+			re := regexp.MustCompile("^" + receiverType + "$") // strict match
+			if !HasReceiver(funcDecl) {
+				if re.MatchString("") {
+					filtered = append(filtered, funcDecl)
+				}
+			}
+
+			// Receiver type is specified, and target function has receiver
+			// Match both func name and receiver type
+			recvTypeExpr := funcDecl.Recv.List[0].Type
+			baseType := stripGenericTypes(recvTypeExpr)
+
+			if baseType == "" {
+				msg := fmt.Sprintf("unexpected receiver type: %T", recvTypeExpr)
+				util.Unimplemented(msg)
+			}
+			if re.MatchString(baseType) {
+				filtered = append(filtered, funcDecl)
+			}
+		}
+		return filtered
+	}
+	// Receiver type is not specified, return all functions without receiver
+	filtered := make([]*dst.FuncDecl, 0)
+	for _, funcDecl := range decls {
+		if !HasReceiver(funcDecl) {
+			filtered = append(filtered, funcDecl)
+		}
+	}
+	return filtered
+
+}
+
+func ListFuncDecls(root *dst.File) []*dst.FuncDecl {
+	funcDecls := make([]*dst.FuncDecl, 0)
 	for _, decl := range root.Decls {
-		if fn, ok := decl.(*dst.FuncDecl); ok && fn.Name.Name == name {
-			return fn
+		funcDecl, ok := decl.(*dst.FuncDecl)
+		if !ok {
+			continue
+		}
+		funcDecls = append(funcDecls, funcDecl)
+	}
+	return funcDecls
+}
+
+func FindStructDecl(root *dst.File, structName string) *dst.GenDecl {
+	for _, decl := range root.Decls {
+		if genDecl, ok := decl.(*dst.GenDecl); ok && genDecl.Tok == token.TYPE {
+			if typeSpec, ok1 := genDecl.Specs[0].(*dst.TypeSpec); ok1 {
+				if typeSpec.Name.Name == structName {
+					return genDecl
+				}
+			}
 		}
 	}
 	return nil
 }
 
-func isValidRegex(pattern string) bool {
-	_, err := regexp.Compile(pattern)
-	return err == nil
+// SplitMultiNameFields splits fields that have multiple names into separate fields.
+// For example, a field like "a, b int" becomes two fields: "a int" and "b int".
+func SplitMultiNameFields(fieldList *dst.FieldList) *dst.FieldList {
+	if fieldList == nil {
+		return nil
+	}
+	result := &dst.FieldList{List: []*dst.Field{}}
+	for _, field := range fieldList.List {
+		// Handle unnamed fields (e.g., embedded types) or fields with single/multiple names
+		namesToProcess := field.Names
+		if len(namesToProcess) == 0 {
+			// For unnamed fields, create one field with no names
+			namesToProcess = []*dst.Ident{nil}
+		}
+
+		for _, name := range namesToProcess {
+			clonedType := util.AssertType[dst.Expr](dst.Clone(field.Type))
+
+			var names []*dst.Ident
+			if name != nil {
+				clonedName := util.AssertType[*dst.Ident](dst.Clone(name))
+				names = []*dst.Ident{clonedName}
+			}
+
+			newField := &dst.Field{
+				Names: names,
+				Type:  clonedType,
+			}
+			result.List = append(result.List, newField)
+		}
+	}
+	return result
 }
 
-func MatchFuncDecl(decl dst.Decl, function string, receiverType string) bool {
-	util.Assert(isValidRegex(function), "invalid function name pattern")
-
-	funcDecl, ok := decl.(*dst.FuncDecl)
-	if !ok {
-		return false
+// CloneTypeParams safely clones a type parameter field list for generic functions.
+// Returns nil if the input is nil.
+func CloneTypeParams(typeParams *dst.FieldList) *dst.FieldList {
+	if typeParams == nil {
+		return nil
 	}
-	re := regexp.MustCompile("^" + function + "$") // strict match
-	if !re.MatchString(funcDecl.Name.Name) {
-		return false
-	}
-	if receiverType != "" {
-		re = regexp.MustCompile("^" + receiverType + "$") // strict match
-		if !HasReceiver(funcDecl) {
-			return re.MatchString("")
-		}
-		switch recvTypeExpr := funcDecl.Recv.List[0].Type.(type) {
-		case *dst.StarExpr:
-			if _, ok := recvTypeExpr.X.(*dst.Ident); !ok {
-				// This is a generic type, we don't support it yet
-				return false
-			}
-			t := "*" + recvTypeExpr.X.(*dst.Ident).Name
-			return re.MatchString(t)
-		case *dst.Ident:
-			t := recvTypeExpr.Name
-			return re.MatchString(t)
-		case *dst.IndexExpr:
-			// This is a generic type, we don't support it yet
-			return false
-		default:
-			msg := fmt.Sprintf("unexpected receiver type: %T", recvTypeExpr)
-			util.UnimplementedT(msg)
-		}
-	} else {
-		if HasReceiver(funcDecl) {
-			return false
-		}
-	}
-	return true
-}
-
-func MatchStructDecl(decl dst.Decl, structType string) bool {
-	if genDecl, ok := decl.(*dst.GenDecl); ok {
-		if genDecl.Tok == token.TYPE {
-			if typeSpec, ok := genDecl.Specs[0].(*dst.TypeSpec); ok {
-				if typeSpec.Name.Name == structType {
-					return true
-				}
-			}
-		}
-	}
-	return false
+	return util.AssertType[*dst.FieldList](dst.Clone(typeParams))
 }

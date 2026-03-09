@@ -19,6 +19,7 @@ func main() {
 		panic(err)
 	}
 	verifier.WaitAndAssertTraces(func(stubs []tracetest.SpanStubs) {
-		verifier.VerifyLLMCommonAttributes(stubs[0][0], "chains", "langchain", trace.SpanKindClient)
+		// Top-level chain should have Workflow span kind
+		verifier.VerifyLLMCommonAttributesWithGenAISpanKind(stubs[0][0], "chains", "langchain", trace.SpanKindClient, "workflow")
 	}, 1)
 }

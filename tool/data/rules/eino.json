@@ -1,6 +1,5 @@
 [
   {
-    "Version": "[0.3.51,)",
     "ImportPath": "github.com/cloudwego/eino/compose",
     "Function": "newGraph",
     "OnEnter": "newGraphOnEnter",

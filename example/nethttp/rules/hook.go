@@ -31,6 +31,16 @@ func httpClientEnterHook(call api.CallContext, t *http.Transport, req *http.Requ
 
 //go:linkname httpClientExitHook net/http.httpClientExitHook
 func httpClientExitHook(call api.CallContext, res *http.Response, err error) {
-	header, _ := json.Marshal(res.Header)
-	fmt.Println("response header is ", string(header))
+	// 添加对 res 是否为 nil 的检查
+	if res != nil {
+		header, _ := json.Marshal(res.Header)
+		fmt.Println("response header is ", string(header))
+	} else {
+		fmt.Println("response is nil")
+	}
+
+	// 可以同时处理 err 信息
+	if err != nil {
+		fmt.Println("request error: ", err.Error())
+	}
 }

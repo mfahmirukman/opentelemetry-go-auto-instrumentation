@@ -26,23 +26,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-//go:linkname clientSseOnEnter github.com/mark3labs/mcp-go/client.clientSseOnEnter
-func clientSseOnEnter(call api.CallContext, c *client.SSEMCPClient,
+//go:linkname clientOnEnter github.com/mark3labs/mcp-go/client.clientOnEnter
+func clientOnEnter(call api.CallContext, c *client.Client,
 	ctx context.Context,
 	method string,
 	params interface{}) {
-	clientOnEnter(call, ctx, method, params)
+	clientEnter(call, ctx, method, params)
 }
 
-//go:linkname clientStdioOnEnter github.com/mark3labs/mcp-go/client.clientStdioOnEnter
-func clientStdioOnEnter(call api.CallContext, c *client.StdioMCPClient,
-	ctx context.Context,
-	method string,
-	params interface{}) {
-	clientOnEnter(call, ctx, method, params)
-}
-
-func clientOnEnter(call api.CallContext,
+func clientEnter(call api.CallContext,
 	ctx context.Context,
 	method string,
 	params interface{}) {
@@ -68,16 +60,12 @@ func clientOnEnter(call api.CallContext,
 	call.SetData(data)
 }
 
-//go:linkname clientSseOnExit github.com/mark3labs/mcp-go/client.clientSseOnExit
-func clientSseOnExit(call api.CallContext, j *json.RawMessage, err error) {
-	clientOnExit(call, j, err)
+//go:linkname clientOnExit github.com/mark3labs/mcp-go/client.clientOnExit
+func clientOnExit(call api.CallContext, j *json.RawMessage, err error) {
+	clientExit(call, j, err)
 }
 
-//go:linkname clientStdioOnExit github.com/mark3labs/mcp-go/client.clientStdioOnExit
-func clientStdioOnExit(call api.CallContext, j *json.RawMessage, err error) {
-	clientOnExit(call, j, err)
-}
-func clientOnExit(call api.CallContext, j *json.RawMessage, err error) {
+func clientExit(call api.CallContext, j *json.RawMessage, err error) {
 	data, ok := call.GetData().(map[string]interface{})
 	if !ok {
 		return

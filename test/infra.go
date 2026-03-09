@@ -180,7 +180,20 @@ func RunApp(t *testing.T, appName string, env ...string) (string, string) {
 	cmd := runCmd([]string{"./" + appName})
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, env...)
-	cmd.Env = append(cmd.Env, "IN_OTEL_TEST=true")
+	
+	// Check if user has explicitly set IN_OTEL_TEST
+	// If not, default to `true`
+	hasTestFlag := false
+	for i := len(cmd.Env) - 1; i >= 0; i-- {
+		if strings.HasPrefix(cmd.Env[i], "IN_OTEL_TEST=") {
+			hasTestFlag = true
+			break
+		}
+	}
+	if !hasTestFlag {
+		cmd.Env = append(cmd.Env, "IN_OTEL_TEST=true")
+	}
+	
 	err := cmd.Run()
 	stdoutText := readStdoutLog(t)
 	stderrText := readStderrLog(t)
@@ -193,7 +206,7 @@ func RunApp(t *testing.T, appName string, env ...string) (string, string) {
 
 func FetchVersion(t *testing.T, dependency, version string) string {
 	t.Logf("dependency %s, version %s", dependency, version)
-	output, err := exec.Command("go", "get", "-u", dependency+"@"+version).Output()
+	output, err := exec.Command("go", "get", dependency+"@"+version).Output()
 	if err != nil {
 		t.Fatal(output, err)
 	}
@@ -250,7 +263,7 @@ func ExpectSame(t *testing.T, expected, actual string) {
 
 func ExpectWhen(t *testing.T, prediction func() (res bool, msg string)) {
 	if r, m := prediction(); !r {
-		t.Fatalf(m)
+		t.Fatalf("%s", m)
 	}
 }
 
@@ -278,7 +291,7 @@ func ExpectContainsNothing(t *testing.T, actualItems []string) {
 
 func TBuildAppNoop(t *testing.T, appName string, muzzleClasses ...string) {
 	UseApp(appName)
-	if muzzleClasses == nil || len(muzzleClasses) == 0 {
+	if len(muzzleClasses) == 0 {
 		RunGoBuild(t)
 	} else {
 		RunGoBuild(t, muzzleClasses...)

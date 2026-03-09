@@ -1,5 +1,7 @@
 module github.com/alibaba/loongsuite-go-agent/pkg/rules/fmt7
 
-go 1.23.0
+go 1.24.0
 
-require github.com/alibaba/loongsuite-go-agent/pkg v0.0.0-20250613015359-8313b2644a4a
+replace github.com/alibaba/loongsuite-go-agent/pkg => ../../../
+
+require github.com/alibaba/loongsuite-go-agent/pkg v0.0.0-00010101000000-000000000000

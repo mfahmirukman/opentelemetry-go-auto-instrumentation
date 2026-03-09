@@ -1,18 +1,19 @@
 module github.com/alibaba/loongsuite-go-agent/pkg/rules/nacos/dom
 
-go 1.23.0
+go 1.24.0
 
 replace github.com/alibaba/loongsuite-go-agent/pkg => ../../../../pkg
 
 require (
 	github.com/alibaba/loongsuite-go-agent/pkg v0.0.0-00010101000000-000000000000
 	github.com/nacos-group/nacos-sdk-go/v2 v2.0.0
-	go.opentelemetry.io/otel v1.36.0
-	go.opentelemetry.io/otel/metric v1.36.0
+	go.opentelemetry.io/otel v1.40.0
+	go.opentelemetry.io/otel/metric v1.40.0
 )
 
 require (
 	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-errors/errors v1.0.1 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect

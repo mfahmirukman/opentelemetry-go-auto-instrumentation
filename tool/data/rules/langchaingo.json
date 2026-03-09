@@ -11,6 +11,15 @@
     "Version": "[0.1.13,)",
     "ImportPath": "github.com/tmc/langchaingo/agents",
     "ReceiverType": "\\*Executor",
+    "Function": "Call",
+    "OnEnter": "executorCallOnEnter",
+    "OnExit":"executorCallOnExit",
+    "Path": "github.com/alibaba/loongsuite-go-agent/pkg/rules/langchain"
+  },
+  {
+    "Version": "[0.1.13,)",
+    "ImportPath": "github.com/tmc/langchaingo/agents",
+    "ReceiverType": "\\*Executor",
     "Function": "doAction",
     "OnEnter": "doActionOnEnter",
     "OnExit":"doActionOnExit",

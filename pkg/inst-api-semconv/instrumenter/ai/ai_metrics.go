@@ -75,7 +75,7 @@ func AIClientMetrics(key string) *AIClientMetric {
 }
 
 // for test only
-func newAIClientMatric(key string, meter metric.Meter) (*AIClientMetric, error) {
+func newAIClientMetric(key string, meter metric.Meter) (*AIClientMetric, error) {
 	m := &AIClientMetric{
 		key: attribute.Key(key),
 	}
@@ -151,7 +151,7 @@ func newAIClientServerTimeToFirstTokenMeasures(meter metric.Meter) (metric.Float
 	}
 }
 
-type aiMatricContext struct {
+type aiMetricContext struct {
 	startTime       time.Time
 	startAttributes []attribute.KeyValue
 }
@@ -161,7 +161,7 @@ func (a AIClientMetric) OnBeforeStart(parentContext context.Context, startTimest
 }
 
 func (a AIClientMetric) OnBeforeEnd(ctx context.Context, startAttributes []attribute.KeyValue, startTimestamp time.Time) context.Context {
-	return context.WithValue(ctx, a.key, aiMatricContext{
+	return context.WithValue(ctx, a.key, aiMetricContext{
 		startTime:       startTimestamp,
 		startAttributes: startAttributes,
 	})
@@ -172,7 +172,7 @@ func (a AIClientMetric) OnAfterStart(ctx context.Context, endTimestamp time.Time
 }
 
 func (a AIClientMetric) OnAfterEnd(ctx context.Context, endAttributes []attribute.KeyValue, endTime time.Time) {
-	mc := ctx.Value(a.key).(aiMatricContext)
+	mc := ctx.Value(a.key).(aiMetricContext)
 	startTime, startAttributes := mc.startTime, mc.startAttributes
 	// end attributes should be shadowed by AttrsShadower
 	if a.clientOperationDuration == nil {
@@ -204,11 +204,15 @@ func (a AIClientMetric) OnAfterEnd(ctx context.Context, endAttributes []attribut
 	for _, kv := range endAttributes {
 		switch kv.Key {
 		case semconv.GenAIUsageInputTokensKey:
-			inputTokens = kv.Value
-			hasInputTokens = true
+			if !hasInputTokens {
+				inputTokens = kv.Value
+				hasInputTokens = true
+			}
 		case semconv.GenAIUsageOutputTokensKey:
-			outputTokens = kv.Value
-			hasOutputTokens = true
+			if !hasOutputTokens {
+				outputTokens = kv.Value
+				hasOutputTokens = true
+			}
 		}
 		if hasInputTokens && hasOutputTokens {
 			break

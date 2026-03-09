@@ -30,12 +30,19 @@ type einoCommonAttrsGetter struct {
 }
 
 var _ ai.CommonAttrsGetter[einoRequest, einoResponse] = einoCommonAttrsGetter{}
+var _ ai.GenAISpanKindGetter[einoRequest] = einoCommonAttrsGetter{}
 
 func (einoCommonAttrsGetter) GetAIOperationName(request einoRequest) string {
 	return request.operationName
 }
 func (einoCommonAttrsGetter) GetAISystem(request einoRequest) string {
 	return "eino"
+}
+func (einoCommonAttrsGetter) GetGenAISpanKind(request einoRequest) ai.GenAISpanKind {
+	if request.spanKind == "" {
+		return ai.GenAISpanKindUnknown
+	}
+	return request.spanKind
 }
 
 type LExperimentalAttributeExtractor struct {
@@ -44,14 +51,39 @@ type LExperimentalAttributeExtractor struct {
 
 func (l LExperimentalAttributeExtractor) OnStart(attributes []attribute.KeyValue, parentContext context.Context, request einoRequest) ([]attribute.KeyValue, context.Context) {
 	attributes, parentContext = l.Base.OnStart(attributes, parentContext, request)
-	var val attribute.Value
+
+	spanKind := request.spanKind
+	if spanKind == "" {
+		spanKind = ai.GenAISpanKindUnknown
+	}
+	attributes = append(attributes, spanKind.Attribute())
+
 	if request.input != nil {
+		var val attribute.Value
 		for k, v := range request.input {
-			val = attribute.StringValue(fmt.Sprintf("%#v", v))
-			attributes = append(attributes, attribute.KeyValue{
-				Key:   attribute.Key(fmt.Sprintf("gen_ai.%s.%s", request.operationName, k)),
-				Value: val,
-			})
+			switch v.(type) {
+			case string:
+				if v.(string) == "" {
+					continue
+				}
+				val = attribute.StringValue(v.(string))
+			case int:
+				val = attribute.IntValue(v.(int))
+			case int64:
+				val = attribute.Int64Value(v.(int64))
+			case float64:
+				val = attribute.Float64Value(v.(float64))
+			case bool:
+				val = attribute.BoolValue(v.(bool))
+			default:
+				val = attribute.StringValue(fmt.Sprintf("%#v", v))
+			}
+			if val.Type() > 0 {
+				attributes = append(attributes, attribute.KeyValue{
+					Key:   attribute.Key(fmt.Sprintf("gen_ai.input.%s", k)),
+					Value: val,
+				})
+			}
 			val = attribute.Value{}
 		}
 	}
@@ -63,11 +95,29 @@ func (l LExperimentalAttributeExtractor) OnEnd(attributes []attribute.KeyValue, 
 	if response.output != nil {
 		var val attribute.Value
 		for k, v := range response.output {
-			val = attribute.StringValue(fmt.Sprintf("%#v", v))
-			attributes = append(attributes, attribute.KeyValue{
-				Key:   attribute.Key(fmt.Sprintf("gen_ai.%s.%s", request.operationName, k)),
-				Value: val,
-			})
+			switch v.(type) {
+			case string:
+				if v.(string) == "" {
+					continue
+				}
+				val = attribute.StringValue(v.(string))
+			case int:
+				val = attribute.IntValue(v.(int))
+			case int64:
+				val = attribute.Int64Value(v.(int64))
+			case float64:
+				val = attribute.Float64Value(v.(float64))
+			case bool:
+				val = attribute.BoolValue(v.(bool))
+			default:
+				val = attribute.StringValue(fmt.Sprintf("%#v", v))
+			}
+			if val.Type() > 0 {
+				attributes = append(attributes, attribute.KeyValue{
+					Key:   attribute.Key(fmt.Sprintf("gen_ai.output.%s", k)),
+					Value: val,
+				})
+			}
 			val = attribute.Value{}
 		}
 	}

@@ -20,6 +20,7 @@ import (
 
 const (
 	MLlmGenerateSingle = "llmGenerateSingle"
+	MAgentExecutor     = "agentExecutor"
 	MAgentAction       = "agentAction"
 	MChains            = "chains"
 	MEmbedSingle       = "singleEmbed"

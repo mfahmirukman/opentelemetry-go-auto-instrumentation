@@ -57,12 +57,12 @@ func (ap *AstParser) FindPosition(node dst.Node) token.Position {
 }
 
 // ParseSnippet parses the AST from incomplete source code snippet.
-func (ap *AstParser) ParseSnippet(codeSnippnet string) ([]dst.Stmt, error) {
-	util.Assert(codeSnippnet != "", "empty code snippet")
-	snippet := "package main; func _() {" + codeSnippnet + "}"
+func (ap *AstParser) ParseSnippet(codeSnippet string) ([]dst.Stmt, error) {
+	util.Assert(codeSnippet != "", "empty code snippet")
+	snippet := "package main; func _() {" + codeSnippet + "}"
 	file, err := decorator.ParseFile(ap.fset, "", snippet, 0)
 	if err != nil {
-		return nil, ex.Error(err)
+		return nil, ex.Wrap(err)
 	}
 	return file.Decls[0].(*dst.FuncDecl).Body.List, nil
 }
@@ -73,7 +73,7 @@ func (ap *AstParser) ParseSource(source string) (*dst.File, error) {
 	ap.dec = decorator.NewDecorator(ap.fset)
 	dstRoot, err := ap.dec.Parse(source)
 	if err != nil {
-		return nil, ex.Error(err)
+		return nil, ex.Wrap(err)
 	}
 	return dstRoot, nil
 }
@@ -82,7 +82,7 @@ func (ap *AstParser) ParseFile(filePath string, mode parser.Mode) (*dst.File, er
 	name := filepath.Base(filePath)
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, ex.Error(err)
+		return nil, ex.Wrap(err)
 	}
 	defer func(file *os.File) {
 		err := file.Close()
@@ -92,34 +92,34 @@ func (ap *AstParser) ParseFile(filePath string, mode parser.Mode) (*dst.File, er
 	}(file)
 	astFile, err := parser.ParseFile(ap.fset, name, file, mode)
 	if err != nil {
-		return nil, ex.Error(err)
+		return nil, ex.Wrap(err)
 	}
 	ap.dec = decorator.NewDecorator(ap.fset)
 	dstFile, err := ap.dec.DecorateFile(astFile)
 	if err != nil {
-		return nil, ex.Error(err)
+		return nil, ex.Wrap(err)
 	}
 	return dstFile, nil
 }
 
-func ParseAstFromFileOnlyPackage(filePath string) (*dst.File, error) {
+func ParseFileOnlyPackage(filePath string) (*dst.File, error) {
 	return NewAstParser().ParseFile(filePath, parser.PackageClauseOnly)
 }
 
-func ParseAstFromFileFast(filePath string) (*dst.File, error) {
+func ParseFileFast(filePath string) (*dst.File, error) {
 	return NewAstParser().ParseFile(filePath, parser.SkipObjectResolution)
 }
 
-// ParseAstFromFile parses the AST from complete source file.
-func ParseAstFromFile(filePath string) (*dst.File, error) {
+// ParseFile parses the AST from complete source file.
+func ParseFile(filePath string) (*dst.File, error) {
 	return NewAstParser().ParseFile(filePath, parser.ParseComments)
 }
 
-// WriteAstToFile writes the AST to source file.
-func WriteAstToFile(astRoot *dst.File, filePath string) (string, error) {
+// WriteFile writes the AST to source file.
+func WriteFile(astRoot *dst.File, filePath string) (string, error) {
 	file, err := os.Create(filePath)
 	if err != nil {
-		return "", ex.Error(err)
+		return "", ex.Wrap(err)
 	}
 	defer func(file *os.File) {
 		err := file.Close()
@@ -131,7 +131,7 @@ func WriteAstToFile(astRoot *dst.File, filePath string) (string, error) {
 	r := decorator.NewRestorer()
 	err = r.Fprint(file, astRoot)
 	if err != nil {
-		return "", ex.Error(err)
+		return "", ex.Wrap(err)
 	}
 	return file.Name(), nil
 }

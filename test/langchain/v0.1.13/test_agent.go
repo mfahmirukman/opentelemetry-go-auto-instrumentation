@@ -21,8 +21,16 @@ func main() {
 	}
 
 	verifier.WaitAndAssertTraces(func(stubs []tracetest.SpanStubs) {
-		verifier.VerifyLLMCommonAttributes(stubs[1][0], "agentAction", "langchain", trace.SpanKindClient)
-	}, 3)
+		// All spans are in one trace
+		// Span 0: agentExecutor (root)
+		// Span 1: chains
+		// Span 2: llmGenerateSingle
+		// Span 3: agentAction
+		// Span 4: chains
+		// Span 5: llmGenerateSingle
+		verifier.VerifyLLMCommonAttributesWithGenAISpanKind(stubs[0][0], "agentExecutor", "langchain", trace.SpanKindClient, "agent")
+		verifier.VerifyLLMCommonAttributesWithGenAISpanKind(stubs[0][3], "agentAction", "langchain", trace.SpanKindClient, "tool")
+	}, 1)
 }
 
 type getAgeTool struct {

@@ -30,7 +30,7 @@ func (ollamaRequest) GetAIRequestModel(request testRequest) string {
 	return "deepseek:17b"
 }
 func (ollamaRequest) GetAIRequestEncodingFormats(request testRequest) []string {
-	return []string{"string"}
+	return nil
 }
 func (ollamaRequest) GetAIRequestFrequencyPenalty(request testRequest) float64 {
 	return 1.0
@@ -65,12 +65,22 @@ func (ollamaRequest) GetAIRequestTopK(request testRequest) float64 {
 func (ollamaRequest) GetAIRequestTopP(request testRequest) float64 {
 	return 1.0
 }
+
+func (ollamaRequest) GetAIInput(request testRequest) string {
+	return ""
+}
+
+func (ollamaRequest) GetAIOutput(response testResponse) string {
+	return ""
+}
+
 func (ollamaRequest) GetAIResponseID(request testRequest, response testResponse) string {
 	return "chatcmpl-123"
 }
 func (ollamaRequest) GetAIServerAddress(request testRequest) string {
 	return "127.0.0.1:1234"
 }
+
 func (ollamaRequest) GetAIRequestSeed(request testRequest) int64 {
 	return 100
 }
@@ -110,35 +120,54 @@ func TestAILLMAttrsExtractorStart(t *testing.T) {
 	if len(attrs) == 0 {
 		t.Fatal("attrs is empty")
 	}
-	assert.Equal(t, semconv.GenAIOperationNameKey, attrs[0].Key)
-	assert.Equal(t, "llm", attrs[0].Value.AsString())
-	assert.Equal(t, semconv.GenAISystemKey, attrs[1].Key)
-	assert.Equal(t, "langchain", attrs[1].Value.AsString())
 
-	assert.Equal(t, semconv.GenAIRequestModelKey, attrs[2].Key)
-	assert.Equal(t, "deepseek:17b", attrs[2].Value.AsString())
-	assert.Equal(t, semconv.GenAIRequestEncodingFormatsKey, attrs[3].Key)
-	assert.Equal(t, []string{"string"}, attrs[3].Value.AsStringSlice())
-	assert.Equal(t, semconv.GenAIRequestMaxTokensKey, attrs[4].Key)
-	assert.Equal(t, int64(10), attrs[4].Value.AsInt64())
-	assert.Equal(t, semconv.GenAIRequestFrequencyPenaltyKey, attrs[5].Key)
-	assert.Equal(t, 1.0, attrs[5].Value.AsFloat64())
-	assert.Equal(t, semconv.GenAIRequestPresencePenaltyKey, attrs[6].Key)
-	assert.Equal(t, 1.0, attrs[6].Value.AsFloat64())
-	assert.Equal(t, semconv.GenAIRequestStopSequencesKey, attrs[7].Key)
-	assert.Equal(t, []string{"stop"}, attrs[7].Value.AsStringSlice())
-	assert.Equal(t, semconv.GenAIRequestTemperatureKey, attrs[8].Key)
-	assert.Equal(t, 1.0, attrs[8].Value.AsFloat64())
-	assert.Equal(t, semconv.GenAIRequestTopKKey, attrs[9].Key)
-	assert.Equal(t, 1.0, attrs[9].Value.AsFloat64())
-	assert.Equal(t, semconv.GenAIRequestTopPKey, attrs[10].Key)
-	assert.Equal(t, 1.0, attrs[10].Value.AsFloat64())
-	assert.Equal(t, semconv.GenAIUsageInputTokensKey, attrs[11].Key)
-	assert.Equal(t, int64(10), attrs[11].Value.AsInt64())
-	assert.Equal(t, semconv.ServerAddressKey, attrs[12].Key)
-	assert.Equal(t, "127.0.0.1:1234", attrs[12].Value.AsString())
-	assert.Equal(t, semconv.GenAIRequestSeedKey, attrs[13].Key)
-	assert.Equal(t, int64(100), attrs[13].Value.AsInt64())
+	attrMap := make(map[attribute.Key]attribute.Value, len(attrs))
+	for _, attr := range attrs {
+		attrMap[attr.Key] = attr.Value
+	}
+
+	requireAttrString := func(key attribute.Key, want string) {
+		val, ok := attrMap[key]
+		assert.True(t, ok, "expected attribute %q to be present", key)
+		if ok {
+			assert.Equal(t, want, val.AsString())
+		}
+	}
+
+	requireAttrInt64 := func(key attribute.Key, want int64) {
+		val, ok := attrMap[key]
+		assert.True(t, ok, "expected attribute %q to be present", key)
+		if ok {
+			assert.Equal(t, want, val.AsInt64())
+		}
+	}
+
+	requireAttrFloat := func(key attribute.Key, want float64) {
+		val, ok := attrMap[key]
+		assert.True(t, ok, "expected attribute %q to be present", key)
+		if ok {
+			assert.InDelta(t, want, val.AsFloat64(), 1e-9)
+		}
+	}
+
+	requireAttrString(semconv.GenAIOperationNameKey, "llm")
+	requireAttrString(semconv.GenAISystemKey, "langchain")
+	requireAttrString(semconv.GenAIRequestModelKey, "deepseek:17b")
+	requireAttrInt64(semconv.GenAIRequestMaxTokensKey, 10)
+	requireAttrFloat(semconv.GenAIRequestFrequencyPenaltyKey, 1.0)
+	requireAttrFloat(semconv.GenAIRequestPresencePenaltyKey, 1.0)
+	if val, ok := attrMap[semconv.GenAIRequestStopSequencesKey]; assert.True(t, ok) && ok {
+		assert.Equal(t, []string{"stop"}, val.AsStringSlice())
+	}
+	requireAttrFloat(semconv.GenAIRequestTemperatureKey, 1.0)
+	requireAttrFloat(semconv.GenAIRequestTopKKey, 1.0)
+	requireAttrFloat(semconv.GenAIRequestTopPKey, 1.0)
+	//	requireAttrInt64(semconv.GenAIUsageInputTokensKey, 10)
+	requireAttrInt64(semconv.GenAIRequestSeedKey, 100)
+	requireAttrString(semconv.ServerAddressKey, "127.0.0.1:1234")
+
+	_, hasEncodingFormats := attrMap[semconv.GenAIRequestEncodingFormatsKey]
+	assert.False(t, hasEncodingFormats, "encoding_formats attribute should be omitted")
 }
 func TestAILLMAttrsExtractorEnd(t *testing.T) {
 	LLMExtractor := AILLMAttrsExtractor[testRequest, testResponse, commonRequest, ollamaRequest]{
@@ -148,14 +177,28 @@ func TestAILLMAttrsExtractorEnd(t *testing.T) {
 	attrs := make([]attribute.KeyValue, 0)
 	parentContext := context.Background()
 	attrs, _ = LLMExtractor.OnEnd(attrs, parentContext, testRequest{Operation: "llm", System: "langchain"}, testResponse{}, nil)
-	assert.Equal(t, semconv.GenAIResponseFinishReasonsKey, attrs[0].Key)
-	assert.Equal(t, []string{"stop"}, attrs[0].Value.AsStringSlice())
-	assert.Equal(t, semconv.GenAIResponseIDKey, attrs[1].Key)
-	assert.Equal(t, "chatcmpl-123", attrs[1].Value.AsString())
-	assert.Equal(t, semconv.GenAIResponseModelKey, attrs[2].Key)
-	assert.Equal(t, "deepseek:17b", attrs[2].Value.AsString())
-	assert.Equal(t, semconv.GenAIUsageOutputTokensKey, attrs[3].Key)
-	assert.Equal(t, int64(10), attrs[3].Value.AsInt64())
-	assert.Equal(t, semconv.GenAIResponseIDKey, attrs[4].Key)
-	assert.Equal(t, "chatcmpl-123", attrs[4].Value.AsString())
+	attrMap := make(map[attribute.Key]attribute.Value, len(attrs))
+	for _, attr := range attrs {
+		attrMap[attr.Key] = attr.Value
+	}
+
+	requireValue := func(key attribute.Key) attribute.Value {
+		val, ok := attrMap[key]
+		assert.True(t, ok, "expected attribute %q to be present", key)
+		return val
+	}
+
+	assert.Equal(t, []string{"stop"}, requireValue(semconv.GenAIResponseFinishReasonsKey).AsStringSlice())
+	assert.Equal(t, "deepseek:17b", requireValue(semconv.GenAIResponseModelKey).AsString())
+	assert.Equal(t, int64(10), requireValue(semconv.GenAIUsageInputTokensKey).AsInt64())
+	assert.Equal(t, int64(10), requireValue(semconv.GenAIUsageOutputTokensKey).AsInt64())
+	assert.Equal(t, "chatcmpl-123", requireValue(semconv.GenAIResponseIDKey).AsString())
+
+	countResponseID := 0
+	for _, attr := range attrs {
+		if attr.Key == semconv.GenAIResponseIDKey {
+			countResponseID++
+		}
+	}
+	assert.Equal(t, 1, countResponseID, "response id attribute should appear exactly once")
 }

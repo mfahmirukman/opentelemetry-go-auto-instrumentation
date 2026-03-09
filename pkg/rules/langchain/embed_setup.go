@@ -19,6 +19,7 @@ import (
 	_ "unsafe"
 
 	"github.com/alibaba/loongsuite-go-agent/pkg/api"
+	"github.com/alibaba/loongsuite-go-agent/pkg/inst-api-semconv/instrumenter/ai"
 	"github.com/tmc/langchaingo/embeddings"
 )
 
@@ -33,6 +34,7 @@ func singleEmbedOnEnter(call api.CallContext,
 	request := langChainRequest{
 		operationName: MEmbedSingle,
 		system:        "langchain",
+		spanKind:      ai.GenAISpanKindEmbedding,
 	}
 	langCtx := langChainCommonInstrument.Start(ctx, request)
 	data := make(map[string]interface{})
@@ -70,6 +72,7 @@ func batchedEmbedOnEnter(call api.CallContext,
 	request := langChainRequest{
 		operationName: MEmbedBatch,
 		system:        "langchain",
+		spanKind:      ai.GenAISpanKindEmbedding,
 		input: map[string]interface{}{
 			"batchSize": batchSize,
 		},

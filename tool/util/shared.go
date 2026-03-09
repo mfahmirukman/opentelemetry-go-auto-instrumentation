@@ -34,6 +34,7 @@ const (
 
 const (
 	BuildPattern    = "-p"
+	BuildImportPath = "-importpath"
 	BuildGoVer      = "-goversion"
 	BuildPgoProfile = "-pgoprofile"
 	BuildModeVendor = "-mod=vendor"
@@ -46,19 +47,18 @@ func AssertGoBuild(args []string) {
 		Assert(false, "empty go build command")
 	}
 	if !strings.Contains(args[0], "go") {
-		Assert(false, "invalid go build command %v", args)
+		Assert(false, fmt.Sprintf("invalid go build command %v", args))
 	}
 	if args[1] != "build" && args[1] != "install" {
-		Assert(false, "invalid go build command %v", args)
+		Assert(false, fmt.Sprintf("invalid go build command %v", args))
 	}
 }
 
-func IsCompileCommand(line string) bool {
-	check := []string{"-o", "-p", "-buildid"}
+func isToolCommand(tool string, line string, check []string) bool {
 	if IsWindows() {
-		check = append(check, "compile.exe")
+		check = append(check, tool+".exe")
 	} else if IsUnix() {
-		check = append(check, "compile")
+		check = append(check, tool)
 	} else {
 		ShouldNotReachHere()
 	}
@@ -69,15 +69,19 @@ func IsCompileCommand(line string) bool {
 			return false
 		}
 	}
-
-	// @@PGO compile command is different from normal compile command, we
-	// should skip it, otherwise the same package will be compiled twice
-	// (one for PGO and one for normal), which finally leads to the same
-	// rule being applied twice.
-	if strings.Contains(line, BuildPgoProfile) {
-		return false
-	}
 	return true
+}
+
+func IsCompileCommand(line string) bool {
+	return isToolCommand("compile", line, []string{"-o", "-p", "-buildid"})
+}
+
+func IsCgoCommand(line string) bool {
+	return isToolCommand("cgo", line, []string{"-importpath"})
+}
+func GetMatchedRuleFile() string {
+	const matchedRuleFile = "matched.json"
+	return GetTempBuildDirWith(matchedRuleFile)
 }
 
 func GetTempBuildDir() string {
@@ -102,7 +106,10 @@ func GetPreprocessLogPath(name string) string {
 
 func GetVarNameOfFunc(fn string) string {
 	const varDeclSuffix = "Impl"
-	fn = strings.Title(fn)
+	// Use strings.ToUpper for the first character to avoid deprecated strings.Title
+	if len(fn) > 0 {
+		fn = strings.ToUpper(fn[:1]) + fn[1:]
+	}
 	return fn + varDeclSuffix
 }
 
@@ -136,6 +143,10 @@ func IsGoFile(path string) bool {
 	return strings.HasSuffix(path, ".go")
 }
 
+func IsCgo1GoFile(path string) bool {
+	return strings.HasSuffix(path, ".cgo1.go")
+}
+
 func IsGoModFile(path string) bool {
 	return strings.HasSuffix(path, GoModFile)
 }
@@ -148,9 +159,9 @@ func IsGoTestFile(path string) bool {
 	return strings.HasSuffix(path, "_test.go")
 }
 
-// SplitCmds splits the command line by space, but keep the quoted part as a
+// SplitCompileCmds splits the command line by space, but keep the quoted part as a
 // whole. For example, "a b" c will be split into ["a b", "c"].
-func SplitCmds(input string) []string {
+func SplitCompileCmds(input string) []string {
 	var args []string
 	var inQuotes bool
 	var arg strings.Builder
@@ -185,4 +196,13 @@ func SplitCmds(input string) []string {
 		}
 	}
 	return args
+}
+
+func FindFlagValue(cmd []string, flag string) string {
+	for i, v := range cmd {
+		if v == flag {
+			return strings.Trim(cmd[i+1], `"`)
+		}
+	}
+	return ""
 }

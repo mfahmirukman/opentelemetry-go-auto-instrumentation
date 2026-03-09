@@ -20,6 +20,12 @@ func (aiCommonRequest) GetAIOperationName(request langChainRequest) string {
 func (aiCommonRequest) GetAISystem(request langChainRequest) string {
 	return request.system
 }
+func (aiCommonRequest) GetGenAISpanKind(request langChainRequest) ai.GenAISpanKind {
+	if request.spanKind == "" {
+		return ai.GenAISpanKindUnknown
+	}
+	return request.spanKind
+}
 
 type LExperimentalAttributeExtractor struct {
 	Base ai.AICommonAttrsExtractor[langChainRequest, any, aiCommonRequest]
@@ -27,6 +33,13 @@ type LExperimentalAttributeExtractor struct {
 
 func (l LExperimentalAttributeExtractor) OnStart(attributes []attribute.KeyValue, parentContext context.Context, request langChainRequest) ([]attribute.KeyValue, context.Context) {
 	attributes, parentContext = l.Base.OnStart(attributes, parentContext, request)
+
+	spanKind := request.spanKind
+	if spanKind == "" {
+		spanKind = ai.GenAISpanKindUnknown
+	}
+	attributes = append(attributes, spanKind.Attribute())
+
 	if request.input != nil {
 		var val attribute.Value
 		for k, v := range request.input {

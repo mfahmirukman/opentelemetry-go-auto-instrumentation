@@ -19,7 +19,9 @@ import (
 	_ "unsafe"
 
 	"github.com/alibaba/loongsuite-go-agent/pkg/api"
+	"github.com/alibaba/loongsuite-go-agent/pkg/inst-api-semconv/instrumenter/ai"
 	"github.com/tmc/langchaingo/chains"
+	"go.opentelemetry.io/otel/trace"
 )
 
 //go:linkname callChainOnEnter github.com/tmc/langchaingo/chains.callChainOnEnter
@@ -30,9 +32,16 @@ func callChainOnEnter(call api.CallContext, ctx context.Context,
 	if !langChainEnabler.Enable() {
 		return
 	}
+	// Determine span kind: Workflow for top-level, Task for nested
+	spanKind := ai.GenAISpanKindTask
+	parentSpan := trace.SpanFromContext(ctx)
+	if !parentSpan.SpanContext().IsValid() {
+		spanKind = ai.GenAISpanKindWorkflow
+	}
 	request := langChainRequest{
 		operationName: MChains,
 		system:        "langchain",
+		spanKind:      spanKind,
 	}
 	langCtx := langChainCommonInstrument.Start(ctx, request)
 	data := make(map[string]interface{})

@@ -4,7 +4,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#      http:#www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,6 +28,9 @@ OUTPUT_LINUX_AMD64 = $(OUTPUT_BASE)-linux-amd64
 OUTPUT_WINDOWS_AMD64 = $(OUTPUT_BASE)-windows-amd64.exe
 OUTPUT_DARWIN_ARM64 = $(OUTPUT_BASE)-darwin-arm64
 OUTPUT_LINUX_ARM64 = $(OUTPUT_BASE)-linux-arm64
+
+API_SYNC_SOURCE = pkg/api/api.go
+API_SYNC_TARGET = tool/instrument/api.tmpl
 
 #-------------------------------------------------------------------------------
 # Prepare version
@@ -64,45 +67,46 @@ endif
 
 #-------------------------------------------------------------------------------
 # Build targets
+.PHONY: pre-build
+pre-build: package-pkg
+	@cp $(API_SYNC_SOURCE) $(API_SYNC_TARGET)
+	@go mod tidy
+	@echo "Pre-build completed"
+
 .PHONY: build
-build: package-pkg tidy
+build: pre-build
 	@echo "Building $(OUTPUT_BIN)..."
 	$(eval OUTPUT_BIN=$(OUTPUT_BASE))
 ifeq ($(CURRENT_OS),windows)
 	$(eval OUTPUT_BIN=$(OUTPUT_BASE).exe)
 endif
 	@$(call BUILD_CMD_DEV,$(CURRENT_OS),$(CURRENT_ARCH),$(OUTPUT_BIN))
-	@echo "Built completed: $(OUTPUT_BIN)"
+	@echo "Built completed: $(OUTPUT_BIN) $(VERSION)"
 
 .PHONY: all test clean
 
 all: clean darwin_amd64 linux_amd64 windows_amd64 darwin_arm64 linux_arm64
 	@echo "All builds completed: $(OUTPUT_DARWIN_AMD64) $(OUTPUT_LINUX_AMD64) $(OUTPUT_WINDOWS_AMD64) $(OUTPUT_DARWIN_ARM64) $(OUTPUT_LINUX_ARM64)"
 
-darwin_amd64: package-pkg tidy
+darwin_amd64: pre-build
 	@echo "Building darwin_amd64..."
 	@$(call BUILD_CMD,darwin,amd64,$(OUTPUT_DARWIN_AMD64))
 
-linux_amd64: package-pkg tidy
+linux_amd64: pre-build
 	@echo "Building linux_amd64..."
 	@$(call BUILD_CMD,linux,amd64,$(OUTPUT_LINUX_AMD64))
 
-windows_amd64: package-pkg tidy
+windows_amd64: pre-build
 	@echo "Building windows_amd64..."
 	@$(call BUILD_CMD,windows,amd64,$(OUTPUT_WINDOWS_AMD64))
 
-darwin_arm64: package-pkg tidy
+darwin_arm64: pre-build
 	@echo "Building darwin_arm64..."
 	@$(call BUILD_CMD,darwin,arm64,$(OUTPUT_DARWIN_ARM64))
 
-linux_arm64: package-pkg tidy
+linux_arm64: pre-build
 	@echo "Building linux_arm64..."
 	@$(call BUILD_CMD,linux,arm64,$(OUTPUT_LINUX_ARM64))
-
-.PHONY: tidy
-tidy:
-	@echo "Tidying up dependencies..."
-	@go mod tidy
 
 clean:
 	@echo "Cleaning up..."
@@ -139,3 +143,22 @@ package-pkg:
 	@tar -czf $(PKG_GZIP) --exclude='*.log' --exclude='*.string' --exclude='*.pprof' --exclude='*.gz' $(PKG_TMP)
 	@mv alibaba-pkg.gz tool/data/
 	@rm -rf $(PKG_TMP)
+
+#-------------------------------------------------------------------------------
+# Linting with golangci-lint
+.PHONY: lint
+lint:
+	@LINTER=""; \
+	if [ -n "$$GOBIN" ]; then \
+		LINTER="$$GOBIN/golangci-lint"; \
+	elif [ -n "$$GOPATH" ]; then \
+		LINTER="$$GOPATH/bin/golangci-lint"; \
+	else \
+		LINTER="$$HOME/go/bin/golangci-lint"; \
+	fi; \
+	if [ ! -x "$$LINTER" ]; then \
+  		echo "golangci-lint not found, installing to $$LINTER..."; \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6; \
+	fi; \
+	echo "Running golangci-lint..."; \
+	$$LINTER run --config .golangci.yml ./tool/...

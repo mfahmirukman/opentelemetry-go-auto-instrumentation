@@ -19,6 +19,7 @@ import (
 	_ "unsafe"
 
 	"github.com/alibaba/loongsuite-go-agent/pkg/api"
+	"github.com/alibaba/loongsuite-go-agent/pkg/inst-api-semconv/instrumenter/ai"
 	"github.com/tmc/langchaingo/llms"
 )
 
@@ -32,6 +33,7 @@ func generateFromSinglePromptOnEnter(call api.CallContext,
 	request := langChainRequest{
 		operationName: MLlmGenerateSingle,
 		system:        "langchain",
+		spanKind:      ai.GenAISpanKindGeneration,
 	}
 	langCtx := langChainCommonInstrument.Start(ctx, request)
 	data := make(map[string]interface{})

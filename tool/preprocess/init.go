@@ -119,7 +119,7 @@ func tryLoadPackage(path string) ([]*packages.Package, error) {
 
 	pkgs, err := packages.Load(cfg, path)
 	if err != nil {
-		return nil, ex.Error(err)
+		return nil, ex.Wrap(err)
 	}
 	return pkgs, nil
 }
@@ -154,7 +154,7 @@ func findModule(buildCmd []string) ([]*packages.Package, error) {
 		}
 
 		// Trying to load package from the build argument, error is tolerated
-		// because we dont know what the build argument is. One exception is
+		// because we don't know what the build argument is. One exception is
 		// when we already found packages, in this case, we expect subsequent
 		// build arguments are packages, so we should not tolerate any error.
 		pkgs, err := tryLoadPackage(buildArg)
@@ -181,7 +181,7 @@ func findModule(buildCmd []string) ([]*packages.Package, error) {
 	if !found {
 		pkgs, err := tryLoadPackage(".")
 		if err != nil {
-			return nil, ex.Error(err)
+			return nil, err
 		}
 		for _, pkg := range pkgs {
 			if pkg.Errors != nil {
@@ -191,7 +191,7 @@ func findModule(buildCmd []string) ([]*packages.Package, error) {
 		}
 	}
 	if len(candidates) == 0 {
-		return nil, ex.Errorf(nil, "no package found")
+		return nil, ex.Newf("no package found")
 	}
 
 	return candidates, nil
@@ -210,7 +210,7 @@ func findGoMod(dir string) (string, error) {
 		}
 		dir = par
 	}
-	return "", ex.Errorf(nil, "cannot find go.mod")
+	return "", ex.Newf("cannot find go.mod")
 }
 
 func (dp *DepProcessor) initCmd() {
@@ -234,9 +234,9 @@ func findMainDir(pkgs []*packages.Package) (string, error) {
 		if !util.IsGoFile(gofile) {
 			continue
 		}
-		root, err := ast.ParseAstFromFileFast(gofile)
+		root, err := ast.ParseFileFast(gofile)
 		if err != nil {
-			return "", ex.Error(err)
+			return "", err
 		}
 		for _, decl := range root.Decls {
 			if d, ok := decl.(*dst.FuncDecl); ok && d.Name.Name == "main" {
@@ -245,14 +245,14 @@ func findMainDir(pkgs []*packages.Package) (string, error) {
 			}
 		}
 	}
-	return "", ex.Errorf(nil, "cannot find main function in the source files")
+	return "", ex.Newf("cannot find main function in the source files")
 }
 
 func (dp *DepProcessor) initMod() (err error) {
 	// Find compiling module and package information from the build command
 	pkgs, err := findModule(dp.goBuildCmd)
 	if err != nil {
-		return ex.Error(err)
+		return err
 	}
 	util.Log("Find Go packages %v", util.Jsonify(pkgs))
 	for _, pkg := range pkgs {
@@ -270,7 +270,7 @@ func (dp *DepProcessor) initMod() (err error) {
 			dp.modulePath = pkg.Module.GoMod
 			dir, err := findMainDir(pkgs)
 			if err != nil {
-				return ex.Error(err)
+				return err
 			}
 			dp.otelRuntimeGo = filepath.Join(dir, OtelRuntimeGo)
 		} else {
@@ -283,7 +283,7 @@ func (dp *DepProcessor) initMod() (err error) {
 				gofile := pkg.GoFiles[0]
 				gomod, err := findGoMod(filepath.Dir(gofile))
 				if err != nil {
-					return ex.Error(err)
+					return err
 				}
 				util.Assert(gomod != "", "gomod is empty")
 				util.Assert(util.PathExists(gomod), "gomod does not exist")
@@ -291,7 +291,7 @@ func (dp *DepProcessor) initMod() (err error) {
 				// Get module name from go.mod file
 				modfile, err := parseGoMod(gomod)
 				if err != nil {
-					return ex.Error(err)
+					return err
 				}
 				dp.moduleName = modfile.Module.Mod.Path
 				// We generate additional source file(otel_importer.go) in the
@@ -314,10 +314,10 @@ func (dp *DepProcessor) initMod() (err error) {
 		}
 	}
 	if dp.moduleName == "" || dp.modulePath == "" {
-		return ex.Errorf(nil, "cannot find compiled module")
+		return ex.Newf("cannot find compiled module")
 	}
 	if dp.otelRuntimeGo == "" {
-		return ex.Errorf(nil, "cannot place otel_importer.go file")
+		return ex.Newf("cannot place otel_importer.go file")
 	}
 
 	// We will import alibaba-otel/pkg module in generated code, which is not
@@ -326,18 +326,18 @@ func (dp *DepProcessor) initMod() (err error) {
 	// module, that's why we do this here.
 	// TODO: Once we publish the alibaba-otel/pkg module, we can remove this code
 	// along with the replace directive in the go.mod file.
-	dp.pkgLocalCache, err = findModCacheDir()
+	dp.pkgModDir, err = findPkgModDir()
 	if err != nil {
-		return ex.Error(err)
+		return err
 	}
 	// In the further processing, we will edit the go.mod file, which is illegal
 	// to use relative path, so we need to convert the relative path to an absolute
-	dp.pkgLocalCache, err = filepath.Abs(dp.pkgLocalCache)
+	dp.pkgModDir, err = filepath.Abs(dp.pkgModDir)
 	if err != nil {
-		return ex.Error(err)
+		return ex.Wrap(err)
 	}
-	if dp.pkgLocalCache == "" {
-		return ex.Errorf(nil, "cannot find rule cache dir")
+	if dp.pkgModDir == "" {
+		return ex.Newf("cannot find rule cache dir")
 	}
 	return nil
 }
@@ -386,7 +386,7 @@ func (dp *DepProcessor) init() error {
 	dp.initCmd()
 	err := dp.initMod()
 	if err != nil {
-		return ex.Error(err)
+		return err
 	}
 	dp.initBuildMode()
 	dp.initSignalHandler()

@@ -56,6 +56,13 @@ type BuildConfig struct {
 	// Note that base.json is inevitable to be enabled, even if it is explicitly
 	// disabled.
 	DisableRules string
+
+	// PkgPath specifies the path of the package to be used across multiple
+	// instrumentations
+	PkgPath string
+
+	//go build cache path
+	GoCache string
 }
 
 var conf *BuildConfig
@@ -74,13 +81,17 @@ func (bc *BuildConfig) GetDisabledRules() string {
 	return bc.DisableRules
 }
 
+func (bc *BuildConfig) GetGoCache() string {
+	return bc.GoCache
+}
+
 func (bc *BuildConfig) makeRuleAbs(file string) (string, error) {
 	if util.PathNotExists(file) {
-		return "", ex.Errorf(nil, "file %s not exists", file)
+		return "", ex.Newf("file %s not exists", file)
 	}
 	file, err := filepath.Abs(file)
 	if err != nil {
-		return "", ex.Error(err)
+		return "", ex.Wrap(err)
 	}
 	return file, nil
 }
@@ -100,7 +111,7 @@ func (bc *BuildConfig) parseRuleFiles() error {
 		for i, file := range files {
 			f, err := bc.makeRuleAbs(file)
 			if err != nil {
-				return ex.Error(err)
+				return err
 			}
 			files[i] = f
 		}
@@ -108,7 +119,7 @@ func (bc *BuildConfig) parseRuleFiles() error {
 	} else {
 		f, err := bc.makeRuleAbs(bc.RuleJsonFiles)
 		if err != nil {
-			return ex.Error(err)
+			return err
 		}
 		bc.RuleJsonFiles = f
 	}
@@ -125,11 +136,11 @@ func storeConfig(bc *BuildConfig) error {
 	file := getConfPath(BuildConfFile)
 	bs, err := json.Marshal(bc)
 	if err != nil {
-		return ex.Error(err)
+		return ex.Wrap(err)
 	}
 	_, err = util.WriteFile(file, string(bs))
 	if err != nil {
-		return ex.Error(err)
+		return err
 	}
 	return nil
 }
@@ -145,12 +156,12 @@ func loadConfig() (*BuildConfig, error) {
 	file := getConfPath(BuildConfFile)
 	data, err := util.ReadFile(file)
 	if err != nil {
-		return &BuildConfig{}, ex.Error(err)
+		return &BuildConfig{}, err
 	}
 	bc := &BuildConfig{}
 	err = json.Unmarshal([]byte(data), bc)
 	if err != nil {
-		return nil, ex.Error(err)
+		return nil, ex.Wrap(err)
 	}
 	return bc, nil
 }
@@ -204,13 +215,13 @@ func InitConfig() (err error) {
 	// Load build config from json file
 	conf, err = loadConfig()
 	if err != nil {
-		return ex.Error(err)
+		return err
 	}
 	loadConfigFromEnv(conf)
 
 	err = conf.parseRuleFiles()
 	if err != nil {
-		return ex.Error(err)
+		return err
 	}
 
 	mode := os.O_WRONLY | os.O_APPEND
@@ -240,16 +251,23 @@ func Configure() error {
 		"Enable debug mode, leave temporary files for debugging")
 	flag.StringVar(&bc.RuleJsonFiles, "rule", bc.RuleJsonFiles,
 		"Use custom.json rules. Multiple rules are separated by comma.")
+	flag.StringVar(&bc.GoCache, "gocache", bc.GoCache,
+		"Use gocache config. Reduce compilation time.")
 	flag.StringVar(&bc.DisableRules, "disable", bc.DisableRules,
 		"Disable specific rules. Use 'all' to disable all default rules, or comma-separated list of rule file names to disable specific rules")
-	flag.CommandLine.Parse(os.Args[2:])
+	flag.StringVar(&bc.PkgPath, "pkg", bc.PkgPath,
+		"Specify the path of the package to be used across multiple instrumentations")
+	err = flag.CommandLine.Parse(os.Args[2:])
+	if err != nil {
+		return ex.Wrap(err)
+	}
 
 	util.Log("Configured in %s", getConfPath(BuildConfFile))
 
 	// Store build config for future phases
 	err = storeConfig(bc)
 	if err != nil {
-		return ex.Error(err)
+		return err
 	}
 	return nil
 }

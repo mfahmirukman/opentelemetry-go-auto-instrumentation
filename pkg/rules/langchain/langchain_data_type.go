@@ -14,9 +14,12 @@
 
 package langchain
 
+import "github.com/alibaba/loongsuite-go-agent/pkg/inst-api-semconv/instrumenter/ai"
+
 type langChainRequest struct {
 	operationName string
 	system        string
+	spanKind      ai.GenAISpanKind
 	input         map[string]any
 	output        map[string]any
 }
@@ -24,6 +27,7 @@ type langChainRequest struct {
 type langChainLLMRequest struct {
 	operationName    string
 	moduleName       string
+	spanKind         ai.GenAISpanKind
 	encodingFormats  []string
 	frequencyPenalty float64
 	presencePenalty  float64
@@ -35,10 +39,12 @@ type langChainLLMRequest struct {
 	topP             float64
 	serverAddress    string
 	seed             int64
+	input            string
 }
 type langChainLLMResponse struct {
 	responseFinishReasons []string
 	responseModel         string
 	usageOutputTokens     int64
 	responseID            string
+	output                string
 }

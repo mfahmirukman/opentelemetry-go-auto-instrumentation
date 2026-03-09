@@ -19,6 +19,7 @@ import (
 	_ "unsafe"
 
 	"github.com/alibaba/loongsuite-go-agent/pkg/api"
+	"github.com/alibaba/loongsuite-go-agent/pkg/inst-api-semconv/instrumenter/ai"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/schema"
 	"github.com/tmc/langchaingo/tools"
@@ -35,6 +36,7 @@ func doActionOnEnter(call api.CallContext,
 	request := langChainRequest{
 		operationName: MAgentAction,
 		system:        "langchain",
+		spanKind:      ai.GenAISpanKindTool,
 		input: map[string]interface{}{
 			"tool":    action.Tool,
 			"tool-id": action.ToolID,

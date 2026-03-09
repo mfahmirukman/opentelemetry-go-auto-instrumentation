@@ -18,6 +18,7 @@ import (
 	"context"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.30.0"
+	semconv7 "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
 
 // TODO: remove server.address and put it into NetworkAttributesExtractor
@@ -55,43 +56,76 @@ type AILLMAttrsExtractor[REQUEST any, RESPONSE any, GETTER1 CommonAttrsGetter[RE
 
 func (h *AILLMAttrsExtractor[REQUEST, RESPONSE, GETTER1, GETTER2]) OnStart(attributes []attribute.KeyValue, parentContext context.Context, request REQUEST) ([]attribute.KeyValue, context.Context) {
 	attributes, parentContext = h.Base.OnStart(attributes, parentContext, request)
+
+	// Always add model
 	attributes = append(attributes, attribute.KeyValue{
 		Key:   semconv.GenAIRequestModelKey,
 		Value: attribute.StringValue(h.LLMGetter.GetAIRequestModel(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIRequestEncodingFormatsKey,
-		Value: attribute.StringSliceValue(h.LLMGetter.GetAIRequestEncodingFormats(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIRequestMaxTokensKey,
-		Value: attribute.Int64Value(h.LLMGetter.GetAIRequestMaxTokens(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIRequestFrequencyPenaltyKey,
-		Value: attribute.Float64Value(h.LLMGetter.GetAIRequestFrequencyPenalty(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIRequestPresencePenaltyKey,
-		Value: attribute.Float64Value(h.LLMGetter.GetAIRequestPresencePenalty(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIRequestStopSequencesKey,
-		Value: attribute.StringSliceValue(h.LLMGetter.GetAIRequestStopSequences(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIRequestTemperatureKey,
-		Value: attribute.Float64Value(h.LLMGetter.GetAIRequestTemperature(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIRequestTopKKey,
-		Value: attribute.Float64Value(h.LLMGetter.GetAIRequestTopK(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIRequestTopPKey,
-		Value: attribute.Float64Value(h.LLMGetter.GetAIRequestTopP(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIUsageInputTokensKey,
-		Value: attribute.Int64Value(h.LLMGetter.GetAIUsageInputTokens(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.ServerAddressKey,
-		Value: attribute.StringValue(h.LLMGetter.GetAIServerAddress(request)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIRequestSeedKey,
-		Value: attribute.Int64Value(h.LLMGetter.GetAIRequestSeed(request)),
 	})
+
+	// Only add optional parameters if they have non-zero values
+	if maxTokens := h.LLMGetter.GetAIRequestMaxTokens(request); maxTokens > 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIRequestMaxTokensKey,
+			Value: attribute.Int64Value(maxTokens),
+		})
+	}
+	if frequencyPenalty := h.LLMGetter.GetAIRequestFrequencyPenalty(request); frequencyPenalty != 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIRequestFrequencyPenaltyKey,
+			Value: attribute.Float64Value(frequencyPenalty),
+		})
+	}
+	if presencePenalty := h.LLMGetter.GetAIRequestPresencePenalty(request); presencePenalty != 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIRequestPresencePenaltyKey,
+			Value: attribute.Float64Value(presencePenalty),
+		})
+	}
+	if stopSequences := h.LLMGetter.GetAIRequestStopSequences(request); len(stopSequences) > 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIRequestStopSequencesKey,
+			Value: attribute.StringSliceValue(stopSequences),
+		})
+	}
+	if temperature := h.LLMGetter.GetAIRequestTemperature(request); temperature != 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIRequestTemperatureKey,
+			Value: attribute.Float64Value(temperature),
+		})
+	}
+	if topK := h.LLMGetter.GetAIRequestTopK(request); topK != 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIRequestTopKKey,
+			Value: attribute.Float64Value(topK),
+		})
+	}
+	if topP := h.LLMGetter.GetAIRequestTopP(request); topP != 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIRequestTopPKey,
+			Value: attribute.Float64Value(topP),
+		})
+	}
+	if seed := h.LLMGetter.GetAIRequestSeed(request); seed != 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIRequestSeedKey,
+			Value: attribute.Int64Value(seed),
+		})
+	}
+	if input := h.LLMGetter.GetAIInput(request); input != "" {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv7.GenAIInputMessagesKey,
+			Value: attribute.StringValue(input),
+		})
+	}
+
+	if serverAddress := h.LLMGetter.GetAIServerAddress(request); serverAddress != "" {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.ServerAddressKey,
+			Value: attribute.StringValue(serverAddress),
+		})
+	}
+
 	if h.Base.AttributesFilter != nil {
 		attributes = h.Base.AttributesFilter(attributes)
 	}
@@ -100,21 +134,45 @@ func (h *AILLMAttrsExtractor[REQUEST, RESPONSE, GETTER1, GETTER2]) OnStart(attri
 func (h *AILLMAttrsExtractor[REQUEST, RESPONSE, GETTER1, GETTER2]) OnEnd(attributes []attribute.KeyValue, context context.Context, request REQUEST, response RESPONSE, err error) ([]attribute.KeyValue, context.Context) {
 	attributes, context = h.Base.OnEnd(attributes, context, request, response, err)
 
-	attributes = append(attributes, attribute.KeyValue{
-		Key:   semconv.GenAIResponseFinishReasonsKey,
-		Value: attribute.StringSliceValue(h.LLMGetter.GetAIResponseFinishReasons(request, response)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIResponseIDKey,
-		Value: attribute.StringValue(h.LLMGetter.GetAIResponseID(request, response)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIResponseModelKey,
-		Value: attribute.StringValue(h.LLMGetter.GetAIResponseModel(request, response)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIUsageOutputTokensKey,
-		Value: attribute.Int64Value(h.LLMGetter.GetAIUsageOutputTokens(request, response)),
-	}, attribute.KeyValue{
-		Key:   semconv.GenAIResponseIDKey,
-		Value: attribute.StringValue(h.LLMGetter.GetAIResponseID(request, response)),
-	})
+	// Only add attributes with non-zero/non-empty values
+	if finishReasons := h.LLMGetter.GetAIResponseFinishReasons(request, response); len(finishReasons) > 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIResponseFinishReasonsKey,
+			Value: attribute.StringSliceValue(finishReasons),
+		})
+	}
+	if responseModel := h.LLMGetter.GetAIResponseModel(request, response); responseModel != "" {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIResponseModelKey,
+			Value: attribute.StringValue(responseModel),
+		})
+	}
+	if inputTokens := h.LLMGetter.GetAIUsageInputTokens(request); inputTokens > 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIUsageInputTokensKey,
+			Value: attribute.Int64Value(inputTokens),
+		})
+	}
+	if outputTokens := h.LLMGetter.GetAIUsageOutputTokens(request, response); outputTokens > 0 {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIUsageOutputTokensKey,
+			Value: attribute.Int64Value(outputTokens),
+		})
+	}
+	if output := h.LLMGetter.GetAIOutput(response); output != "" {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv7.GenAIOutputMessagesKey,
+			Value: attribute.StringValue(output),
+		})
+	}
+
+	// Only add response id if it's not empty
+	if responseID := h.LLMGetter.GetAIResponseID(request, response); responseID != "" {
+		attributes = append(attributes, attribute.KeyValue{
+			Key:   semconv.GenAIResponseIDKey,
+			Value: attribute.StringValue(responseID),
+		})
+	}
+
 	return attributes, context
 }

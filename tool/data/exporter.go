@@ -16,10 +16,7 @@ package data
 
 import (
 	"embed"
-	_ "embed"
 	"strings"
-
-	"github.com/alibaba/loongsuite-go-agent/tool/ex"
 )
 
 //go:embed *
@@ -28,7 +25,7 @@ var dataFs embed.FS
 func ListRuleFiles() ([]string, error) {
 	entries, err := dataFs.ReadDir("rules")
 	if err != nil {
-		return nil, ex.Error(err)
+		return nil, err
 	}
 
 	var files []string
@@ -44,6 +41,6 @@ func ReadRuleFile(name string) ([]byte, error) {
 	return dataFs.ReadFile("rules/" + name)
 }
 
-func UseEmbededPkg() ([]byte, error) {
+func UseEmbeddedPkg() ([]byte, error) {
 	return dataFs.ReadFile("alibaba-pkg.gz")
 }

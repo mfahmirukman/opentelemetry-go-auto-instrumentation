@@ -15,21 +15,19 @@
 package ollama
 
 import (
+	"context"
+
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
-	
+
 	"github.com/alibaba/loongsuite-go-agent/pkg/inst-api-semconv/instrumenter/ai"
 	"github.com/alibaba/loongsuite-go-agent/pkg/inst-api/instrumenter"
+	"github.com/alibaba/loongsuite-go-agent/pkg/inst-api/utils"
 	"github.com/alibaba/loongsuite-go-agent/pkg/inst-api/version"
 )
 
-const (
-	OLLAMA_SCOPE_NAME = "github.com/alibaba/loongsuite-go-agent/pkg/rules/ollama"
-)
-
-// ollamaAttrsGetter implements the interfaces for extracting attributes
 type ollamaAttrsGetter struct{}
 
-// Request attribute extraction methods
 func (o ollamaAttrsGetter) GetAISystem(request ollamaRequest) string {
 	return "ollama"
 }
@@ -39,62 +37,61 @@ func (o ollamaAttrsGetter) GetAIRequestModel(request ollamaRequest) string {
 }
 
 func (o ollamaAttrsGetter) GetAIRequestTemperature(request ollamaRequest) float64 {
-	// Temperature parameter not captured in this implementation
-	return 0
+	return request.temperature
 }
 
 func (o ollamaAttrsGetter) GetAIRequestMaxTokens(request ollamaRequest) int64 {
-	// Max tokens parameter not captured in this implementation
-	return 0
+	return request.maxTokens
 }
 
 func (o ollamaAttrsGetter) GetAIRequestTopP(request ollamaRequest) float64 {
-	// TopP parameter not captured in this implementation
-	return 0
+	return request.topP
 }
 
 func (o ollamaAttrsGetter) GetAIRequestTopK(request ollamaRequest) float64 {
-	// TopK parameter not captured in this implementation
-	return 0
+	return request.topK
 }
 
 func (o ollamaAttrsGetter) GetAIRequestStopSequences(request ollamaRequest) []string {
-	// Stop sequences not captured in this implementation
-	return nil
+	return request.stopSequences
 }
 
 func (o ollamaAttrsGetter) GetAIRequestFrequencyPenalty(request ollamaRequest) float64 {
-	// Frequency penalty parameter not captured in this implementation
-	return 0
+	return request.frequencyPenalty
 }
 
 func (o ollamaAttrsGetter) GetAIRequestPresencePenalty(request ollamaRequest) float64 {
-	// Presence penalty parameter not captured in this implementation
-	return 0
+	return request.presencePenalty
 }
 
 func (o ollamaAttrsGetter) GetAIRequestIsStream(request ollamaRequest) bool {
-	// Ollama uses callback-based streaming; this implementation reports as non-streaming
-	return false
+	return request.isStreaming
 }
 
 func (o ollamaAttrsGetter) GetAIOperationName(request ollamaRequest) string {
+	if request.modelOperation != "" {
+		return request.modelOperation
+	}
 	return request.operationType
 }
 
 func (o ollamaAttrsGetter) GetAIRequestEncodingFormats(request ollamaRequest) []string {
-	// Encoding formats not captured in this implementation
 	return nil
 }
 
 func (o ollamaAttrsGetter) GetAIRequestSeed(request ollamaRequest) int64 {
-	// Seed parameter not captured in this implementation
-	return 0
+	return request.seed
 }
 
-// Response attribute extraction methods
+func (o ollamaAttrsGetter) GetAIInput(request ollamaRequest) string {
+	return request.input
+}
+
+func (o ollamaAttrsGetter) GetAIOutput(response ollamaResponse) string { // Changed from response.output to response.output
+	return response.content
+}
+
 func (o ollamaAttrsGetter) GetAIResponseModel(request ollamaRequest, response ollamaResponse) string {
-	// Model comes from request
 	return request.model
 }
 
@@ -106,6 +103,10 @@ func (o ollamaAttrsGetter) GetAIUsageOutputTokens(request ollamaRequest, respons
 	return int64(request.completionTokens)
 }
 
+func (o ollamaAttrsGetter) GetStreamingMetrics(response ollamaResponse) map[string]interface{} {
+	return make(map[string]interface{})
+}
+
 func (o ollamaAttrsGetter) GetAIResponseFinishReasons(request ollamaRequest, response ollamaResponse) []string {
 	if response.err != nil {
 		return []string{"error"}
@@ -114,30 +115,44 @@ func (o ollamaAttrsGetter) GetAIResponseFinishReasons(request ollamaRequest, res
 }
 
 func (o ollamaAttrsGetter) GetAIResponseID(request ollamaRequest, response ollamaResponse) string {
-	// Response ID not available in Ollama API
 	return ""
 }
 
 func (o ollamaAttrsGetter) GetAIServerAddress(request ollamaRequest) string {
-	// Server address not captured in this implementation
-	return ""
+	return request.serverAddress
 }
 
-// BuildOllamaLLMInstrumenter creates the instrumenter using the generic pattern
 func BuildOllamaLLMInstrumenter() instrumenter.Instrumenter[ollamaRequest, ollamaResponse] {
 	builder := instrumenter.Builder[ollamaRequest, ollamaResponse]{}
 	getter := ollamaAttrsGetter{}
-	
+
 	return builder.Init().
 		SetSpanNameExtractor(&ai.AISpanNameExtractor[ollamaRequest, ollamaResponse]{Getter: getter}).
 		SetSpanKindExtractor(&instrumenter.AlwaysClientExtractor[ollamaRequest]{}).
 		AddAttributesExtractor(&ai.AILLMAttrsExtractor[ollamaRequest, ollamaResponse, ollamaAttrsGetter, ollamaAttrsGetter]{}).
+		AddAttributesExtractor(&embeddingAttributesExtractor{}).
 		SetInstrumentationScope(instrumentation.Scope{
-			Name:    OLLAMA_SCOPE_NAME,
+			Name:    utils.OLLAMA_SCOPE_NAME,
 			Version: version.Tag,
 		}).
+		AddOperationListeners(ai.AIClientMetrics("ollama")).
 		BuildInstrumenter()
 }
 
-// Singleton instance
+type embeddingAttributesExtractor struct{}
+
+func (e *embeddingAttributesExtractor) OnStart(attributes []attribute.KeyValue, parentContext context.Context, request ollamaRequest) ([]attribute.KeyValue, context.Context) {
+	return attributes, parentContext
+}
+
+func (e *embeddingAttributesExtractor) OnEnd(attributes []attribute.KeyValue, context context.Context, request ollamaRequest, response ollamaResponse, err error) ([]attribute.KeyValue, context.Context) {
+	if request.operationType == "embed" || request.operationType == "embeddings" {
+		attributes = append(attributes,
+			attribute.Int("gen_ai.embedding.count", request.embeddingCount),
+			attribute.Int("gen_ai.embedding.dimensions", request.embeddingDim),
+		)
+	}
+	return attributes, context
+}
+
 var ollamaInstrumenter = BuildOllamaLLMInstrumenter()

@@ -19,6 +19,7 @@ import (
 	_ "unsafe"
 
 	"github.com/alibaba/loongsuite-go-agent/pkg/api"
+	"github.com/alibaba/loongsuite-go-agent/pkg/inst-api-semconv/instrumenter/ai"
 	"github.com/tmc/langchaingo/schema"
 	"github.com/tmc/langchaingo/vectorstores"
 )
@@ -34,6 +35,7 @@ func getRelevantDocumentsOnEnter(call api.CallContext,
 	request := langChainRequest{
 		operationName: MRelevantDoc,
 		system:        "langchain",
+		spanKind:      ai.GenAISpanKindRetriever,
 	}
 	langCtx := langChainCommonInstrument.Start(ctx, request)
 	data := make(map[string]interface{})

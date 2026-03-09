@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/alibaba/loongsuite-go-agent/tool/ast"
 	"github.com/alibaba/loongsuite-go-agent/tool/ex"
 	"github.com/alibaba/loongsuite-go-agent/tool/rules"
 	"github.com/alibaba/loongsuite-go-agent/tool/util"
@@ -35,7 +36,7 @@ type Dependency struct {
 func (dp *DepProcessor) addDependency(gomod string, dependencies []Dependency) error {
 	modfile, err := parseGoMod(gomod)
 	if err != nil {
-		return ex.Error(err)
+		return err
 	}
 	// For each dependency, check if it is already in the go.mod file and add
 	// it using require directive. If the dependency specifies a replace path,
@@ -52,7 +53,7 @@ func (dp *DepProcessor) addDependency(gomod string, dependencies []Dependency) e
 		if !alreadyRequire {
 			err = modfile.AddRequire(dependency.ImportPath, dependency.Version)
 			if err != nil {
-				return ex.Error(err)
+				return ex.Wrap(err)
 			}
 			changed = true
 			util.Log("Add require dependency %s %s",
@@ -70,7 +71,7 @@ func (dp *DepProcessor) addDependency(gomod string, dependencies []Dependency) e
 				err = modfile.AddReplace(dependency.ImportPath, "",
 					dependency.ReplacePath, dependency.ReplaceVersion)
 				if err != nil {
-					return ex.Error(err)
+					return ex.Wrap(err)
 				}
 				changed = true
 				util.Log("Add replace dependency %s %s => %s %s",
@@ -83,17 +84,38 @@ func (dp *DepProcessor) addDependency(gomod string, dependencies []Dependency) e
 	if changed {
 		err = writeGoMod(gomod, modfile)
 		if err != nil {
-			return ex.Error(err)
+			return err
 		}
 	}
 	return nil
 }
 
-func (dp *DepProcessor) newDeps(bundles []*rules.RuleBundle) error {
+func (dp *DepProcessor) findRuleDir(path string) (string, string, error) {
+	// The rule can be either a standard rule or a custom rule
+	// We should identify it and define how to find it
+	if util.PathExists(path) {
+		modfile, err := parseGoMod(filepath.Join(path, util.GoModFile))
+		if err != nil {
+			return "", "", err
+		}
+		// Custom rule, find it locally
+		moduleName := modfile.Module.Mod.Path
+		replacePath := path
+		return moduleName, replacePath, nil
+	} else {
+		// Standard rule, find it from the pkg module dir
+		t := strings.TrimPrefix(path, pkgPrefix)
+		moduleName := path
+		replacePath := filepath.Join(dp.pkgModDir, t)
+		return moduleName, replacePath, nil
+	}
+}
+
+func (dp *DepProcessor) newDeps(bundles []*rules.InstRuleSet) error {
 	content := "package main\n"
 	builtin := map[string]string{
 		// for go:linkname when declaring printstack/getstack variable
-		"unsafe": "_",
+		"unsafe": ast.IdentIgnore,
 		// for debug.Stack and log.Printf when declaring printstack/getstack
 		// we do need import alias because user may declare global variable such
 		// as "log" or "debug" in their code, which will conflict with the import
@@ -101,10 +123,10 @@ func (dp *DepProcessor) newDeps(bundles []*rules.RuleBundle) error {
 		// for log.Printf when declaring printstack/getstack variable
 		"log": "_otel_log",
 		// otel setup
-		"github.com/alibaba/loongsuite-go-agent/pkg": "_",
-		"go.opentelemetry.io/otel":                   "_",
-		"go.opentelemetry.io/otel/sdk/trace":         "_",
-		"go.opentelemetry.io/otel/baggage":           "_",
+		"github.com/alibaba/loongsuite-go-agent/pkg": ast.IdentIgnore,
+		"go.opentelemetry.io/otel":                   ast.IdentIgnore,
+		"go.opentelemetry.io/otel/sdk/trace":         ast.IdentIgnore,
+		"go.opentelemetry.io/otel/baggage":           ast.IdentIgnore,
 	}
 	for pkg, alias := range builtin {
 		content += fmt.Sprintf("import %s %q\n", alias, pkg)
@@ -115,35 +137,34 @@ func (dp *DepProcessor) newDeps(bundles []*rules.RuleBundle) error {
 	if len(bundles) == 0 {
 		_, err := util.WriteFile(dp.otelRuntimeGo, content)
 		if err != nil {
-			return ex.Error(err)
+			return err
 		}
 		return nil
 	}
 
-	// Generate the otel_importer.go file with the rule bundles
-	paths := map[string]bool{}
+	// Generate the otel.runtime.go file with the rule bundles
+	addDeps := make([]Dependency, 0)
 	for _, bundle := range bundles {
-		for _, funcRules := range bundle.File2FuncRules {
-			for _, rules := range funcRules {
-				for _, rule := range rules {
-					if rule.GetPath() != "" {
-						paths[rule.GetPath()] = true
+		for _, funcRules := range bundle.FuncRules {
+			for _, rule := range funcRules {
+				path := rule.GetPath()
+				if path != "" {
+					moduleName, replacePath, err := dp.findRuleDir(path)
+					if err != nil {
+						return err
 					}
+					content += fmt.Sprintf("import _ %q\n", moduleName)
+					addDeps = append(addDeps, Dependency{
+						ImportPath: moduleName,
+						// use latest version for the rule import
+						Version:        "v0.0.0-00010101000000-000000000000",
+						Replace:        true,
+						ReplacePath:    replacePath,
+						ReplaceVersion: "",
+					})
 				}
 			}
 		}
-	}
-	addDeps := make([]Dependency, 0)
-	for path := range paths {
-		content += fmt.Sprintf("import _ %q\n", path)
-		t := strings.TrimPrefix(path, pkgPrefix)
-		addDeps = append(addDeps, Dependency{
-			ImportPath:     path,
-			Version:        "v0.0.0-00010101000000-000000000000", // use latest version for the rule import
-			Replace:        true,
-			ReplacePath:    filepath.Join(dp.pkgLocalCache, t),
-			ReplaceVersion: "",
-		})
 	}
 	cnt := 0
 	for _, bundle := range bundles {
@@ -153,11 +174,11 @@ func (dp *DepProcessor) newDeps(bundles []*rules.RuleBundle) error {
 		// in the main package, adding new linkname for generated code will cause
 		// the symbol redefinition error.
 		if bundle.ImportPath != "main" {
-			tag = fmt.Sprintf("//go:linkname _getstatck%d %s.OtelGetStackImpl\n",
+			tag = fmt.Sprintf("//go:linkname _getstack%d %s.OtelGetStackImpl\n",
 				cnt, bundle.ImportPath)
 		}
 		content += tag
-		s := fmt.Sprintf("var _getstatck%d = _otel_debug.Stack\n", cnt)
+		s := fmt.Sprintf("var _getstack%d = _otel_debug.Stack\n", cnt)
 		content += s
 		if bundle.ImportPath != "main" {
 			tag = fmt.Sprintf("//go:linkname _printstack%d %s.OtelPrintStackImpl\n",
@@ -170,12 +191,12 @@ func (dp *DepProcessor) newDeps(bundles []*rules.RuleBundle) error {
 	}
 	_, err := util.WriteFile(dp.otelRuntimeGo, content)
 	if err != nil {
-		return ex.Error(err)
+		return err
 	}
 
 	err = dp.addDependency(dp.getGoModPath(), addDeps)
 	if err != nil {
-		return ex.Error(err)
+		return err
 	}
 	return nil
 }
