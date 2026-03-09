@@ -16,8 +16,8 @@ package databasesql
 
 import (
 	"errors"
-	"fmt"
 	nurl "net/url"
+	"strings"
 )
 
 func parseDSN(driverName, dsn string) (addr string, err error) {
@@ -36,17 +36,82 @@ func parseDSN(driverName, dsn string) (addr string, err error) {
 	return "", errors.New("invalid DSN")
 }
 
-func parsePostgres(url string) (addr string, err error) {
-	u, err := nurl.Parse(url)
-	if err != nil {
-		return "", err
+func parsePostgres(dsn string) (addr string, err error) {
+	// Try URL format: postgres://user:pass@host:port/db
+	u, err := nurl.Parse(dsn)
+	if err == nil && (u.Scheme == "postgres" || u.Scheme == "postgresql") {
+		return u.Host, nil
 	}
 
-	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
-		return "", fmt.Errorf("invalid connection protocol: %s", u.Scheme)
+	// Fall back to lib/pq key=value format: host=myhost port=5432 user=foo ...
+	return parsePostgresKV(dsn)
+}
+
+// parsePostgresKV parses the lib/pq key=value DSN format used by GORM's postgres driver.
+// Example: "host=localhost port=5432 user=foo password=bar dbname=mydb sslmode=disable"
+func parsePostgresKV(dsn string) (string, error) {
+	host := ""
+	port := ""
+
+	i, n := 0, len(dsn)
+	for i < n {
+		// skip whitespace
+		for i < n && dsn[i] == ' ' {
+			i++
+		}
+		if i >= n {
+			break
+		}
+		// read key
+		eqIdx := strings.IndexByte(dsn[i:], '=')
+		if eqIdx < 0 {
+			break
+		}
+		key := strings.TrimSpace(dsn[i : i+eqIdx])
+		i += eqIdx + 1
+
+		// read value (possibly single-quoted)
+		var val string
+		if i < n && dsn[i] == '\'' {
+			i++ // skip opening quote
+			start := i
+			for i < n {
+				if dsn[i] == '\\' {
+					i += 2
+					continue
+				}
+				if dsn[i] == '\'' {
+					break
+				}
+				i++
+			}
+			val = dsn[start:i]
+			if i < n {
+				i++ // skip closing quote
+			}
+		} else {
+			start := i
+			for i < n && dsn[i] != ' ' {
+				i++
+			}
+			val = dsn[start:i]
+		}
+
+		switch key {
+		case "host":
+			host = val
+		case "port":
+			port = val
+		}
 	}
 
-	return u.Host, nil
+	if host == "" {
+		return "unknown-host", nil
+	}
+	if port == "" {
+		port = "29999" // Unknown PostgreSQL default port
+	}
+	return host + ":" + port, nil
 }
 
 func parseMySQL(dsn string) (addr string, err error) {
