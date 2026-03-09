@@ -28,6 +28,8 @@ func parseDSN(driverName, dsn string) (addr string, err error) {
 	case "postgres":
 		fallthrough
 	case "postgresql":
+		fallthrough
+	case "pgx":
 		return parsePostgres(dsn)
 	}
 
@@ -44,7 +46,7 @@ func parsePostgres(url string) (addr string, err error) {
 		return "", fmt.Errorf("invalid connection protocol: %s", u.Scheme)
 	}
 
-	return u.Host + ":" + u.Port(), nil
+	return u.Host, nil
 }
 
 func parseMySQL(dsn string) (addr string, err error) {

@@ -370,6 +370,20 @@ func afterConnTxInstrumentation(call api.CallContext, tx *sql.Tx, err error) {
 	if !dbSqlEnabler.Enable() {
 		return
 	}
+	if tx == nil {
+		return
+	}
+	callData, ok := call.GetData().(map[string]interface{})
+	if !ok {
+		return
+	}
+	dbRequest, ok := callData["dbRequest"].(databaseSqlRequest)
+	if !ok {
+		return
+	}
+	tx.Endpoint = dbRequest.endpoint
+	tx.DriverName = dbRequest.driverName
+	tx.DSN = dbRequest.dsn
 	instrumentEnd(call, err)
 }
 

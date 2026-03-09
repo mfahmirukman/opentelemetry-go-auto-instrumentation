@@ -16,6 +16,7 @@ package databasesql
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/xwb1989/sqlparser"
 )
@@ -66,8 +67,18 @@ func getParams(sql string) []any {
 	return params
 }
 
+// normalizeQuery replaces PostgreSQL double-quoted identifiers with backtick-quoted
+// identifiers so the MySQL-oriented sqlparser can handle them. It also strips
+// schema qualifiers (e.g. "core"."user_contacts" → `user_contacts`).
+func normalizeQuery(query string) string {
+	// Replace double-quoted tokens with backtick-quoted equivalents.
+	// PostgreSQL schema-qualified names like "schema"."table" become `schema`.`table`.
+	result := strings.ReplaceAll(query, `"`, "`")
+	return result
+}
+
 func extractCollection(query string) string {
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.Parse(normalizeQuery(query))
 	if err != nil {
 		return ""
 	}
@@ -107,7 +118,7 @@ func getTableName(node sqlparser.SQLNode) string {
 
 // Extract SQL parameters
 func extractSQLParams(query string) (map[string]string, error) {
-	stmt, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.Parse(normalizeQuery(query))
 	if err != nil {
 		log.Printf("failed to fetch sql params: %v", err)
 		return nil, err

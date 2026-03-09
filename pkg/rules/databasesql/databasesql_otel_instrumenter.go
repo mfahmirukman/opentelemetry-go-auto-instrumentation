@@ -32,6 +32,8 @@ func (d databaseSqlAttrsGetter) GetSystem(request databaseSqlRequest) string {
 	case "postgres":
 		fallthrough
 	case "postgresql":
+		fallthrough
+	case "pgx":
 		return "postgresql"
 	}
 	return "database"
