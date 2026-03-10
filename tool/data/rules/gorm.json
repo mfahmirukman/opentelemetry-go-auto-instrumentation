@@ -12,7 +12,7 @@
     "FieldType": "interface{}"
   },
   {
-    "Version": "[1.22.0,1.25.10)",
+    "Version": "[1.21.0,1.25.10)",
     "ImportPath": "gorm.io/gorm",
     "Function": "Open",
     "OnExit": "afterGormOpen",

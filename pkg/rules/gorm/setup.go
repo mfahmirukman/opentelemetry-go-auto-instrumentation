@@ -16,12 +16,15 @@ package gorm
 
 import (
 	"context"
+	nurl "net/url"
 	"os"
+	"strings"
 	_ "unsafe"
 
 	"github.com/alibaba/loongsuite-go-agent/pkg/api"
 	driver "github.com/go-sql-driver/mysql"
 	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -48,6 +51,12 @@ func afterGormOpen(call api.CallContext, db *gorm.DB, err error) {
 	if err != nil || db == nil {
 		return
 	}
+	// Propagate DB info to the underlying sql.DB so the databasesql
+	// instrumentation layer can populate server.address and db.system.name.
+	// This is necessary when the GORM driver uses sql.OpenDB() (e.g.
+	// gorm.io/driver/postgres with pgx) which bypasses the sql.Open() hook.
+	propagateDbInfoToSqlDB(db)
+
 	// add the callback
 	_ = db.Callback().Create().Before("gorm:create").Register("otel_create_create_span", beforeCallback("", "create"))
 	_ = db.Callback().Query().Before("gorm:query").Register("otel_create_query_span", beforeCallback("", "query"))
@@ -75,7 +84,11 @@ func beforeCallback(endpoint string, op string) func(db *gorm.DB) {
 			User:      user,
 			System:    system,
 		}
-		ctx := gormInstrumenter.Start(context.Background(), request)
+		parentCtx := db.Statement.Context
+		if parentCtx == nil {
+			parentCtx = context.Background()
+		}
+		ctx := gormInstrumenter.Start(parentCtx, request)
 		db.Set(contextKey, ctx)
 		db.Set(requestKey, request)
 	}
@@ -103,19 +116,91 @@ func afterCallback(endpoint string) func(db *gorm.DB) {
 	}
 }
 
+func propagateDbInfoToSqlDB(db *gorm.DB) {
+	sqlDB, err := db.DB()
+	if err != nil || sqlDB == nil {
+		return
+	}
+	// Only set fields if they are not already populated (e.g. by the
+	// databasesql sql.Open() hook).
+	if sqlDB.Endpoint != "" {
+		return
+	}
+	switch d := db.Config.Dialector.(type) {
+	case *mysql.Dialector:
+		cfg, parseErr := driver.ParseDSN(d.Config.DSN)
+		if parseErr != nil {
+			return
+		}
+		sqlDB.Endpoint = cfg.Addr
+		sqlDB.DriverName = "mysql"
+		sqlDB.DSN = d.Config.DSN
+	case *postgres.Dialector:
+		_, addr, _ := parsePostgresDSN(d.Config.DSN)
+		driverName := d.Config.DriverName
+		if driverName == "" {
+			driverName = "pgx"
+		}
+		sqlDB.Endpoint = addr
+		sqlDB.DriverName = driverName
+		sqlDB.DSN = d.Config.DSN
+	}
+}
+
 func getDbInfo(dial gorm.Dialector) (string, string, string, string) {
-	// TODO: support other database
-	res, ok := dial.(*mysql.Dialector)
-	if !ok {
-		return "", "", "", ""
-	}
-	if cfg, ok := res.Config.DbInfo.(*driver.Config); ok {
+	switch d := dial.(type) {
+	case *mysql.Dialector:
+		if cfg, ok := d.Config.DbInfo.(*driver.Config); ok {
+			return cfg.DBName, cfg.Addr, "mysql", cfg.User
+		}
+		cfg, err := driver.ParseDSN(d.Config.DSN)
+		if err != nil {
+			return "", "", "", ""
+		}
+		d.Config.DbInfo = cfg
 		return cfg.DBName, cfg.Addr, "mysql", cfg.User
-	}
-	cfg, err := driver.ParseDSN(res.Config.DSN)
-	if err != nil {
+	case *postgres.Dialector:
+		dbName, addr, user := parsePostgresDSN(d.Config.DSN)
+		return dbName, addr, "postgresql", user
+	default:
 		return "", "", "", ""
 	}
-	res.Config.DbInfo = cfg
-	return cfg.DBName, cfg.Addr, "mysql", cfg.User
+}
+
+func parsePostgresDSN(dsn string) (dbName, addr, user string) {
+	// Try URL format: postgres://user:pass@host:port/dbname?sslmode=disable
+	u, err := nurl.Parse(dsn)
+	if err == nil && (u.Scheme == "postgres" || u.Scheme == "postgresql") {
+		dbName = strings.TrimPrefix(u.Path, "/")
+		addr = u.Host
+		user = u.User.Username()
+		return
+	}
+
+	// Fall back to key=value format: host=localhost port=5432 user=foo dbname=mydb
+	var host, port string
+	for _, part := range strings.Fields(dsn) {
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		switch kv[0] {
+		case "host":
+			host = kv[1]
+		case "port":
+			port = kv[1]
+		case "user":
+			user = kv[1]
+		case "dbname":
+			dbName = kv[1]
+		}
+	}
+	if host == "" {
+		host = "localhost"
+	}
+	if port == "" {
+		port = "5432"
+	}
+	addr = host + ":" + port
+	return
 }

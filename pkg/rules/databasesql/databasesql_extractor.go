@@ -16,6 +16,7 @@ package databasesql
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 
 	"github.com/xwb1989/sqlparser"
@@ -70,10 +71,15 @@ func getParams(sql string) []any {
 // normalizeQuery replaces PostgreSQL double-quoted identifiers with backtick-quoted
 // identifiers so the MySQL-oriented sqlparser can handle them. It also strips
 // schema qualifiers (e.g. "core"."user_contacts" → `user_contacts`).
+var pgPlaceholderRegex = regexp.MustCompile(`\$\d+`)
+
 func normalizeQuery(query string) string {
 	// Replace double-quoted tokens with backtick-quoted equivalents.
 	// PostgreSQL schema-qualified names like "schema"."table" become `schema`.`table`.
 	result := strings.ReplaceAll(query, `"`, "`")
+	// Replace PostgreSQL $N parameter placeholders with ? so the MySQL-oriented
+	// sqlparser can handle them.
+	result = pgPlaceholderRegex.ReplaceAllString(result, "?")
 	return result
 }
 
