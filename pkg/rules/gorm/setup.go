@@ -18,13 +18,12 @@ import (
 	"context"
 	nurl "net/url"
 	"os"
+	"reflect"
 	"strings"
 	_ "unsafe"
 
 	"github.com/alibaba/loongsuite-go-agent/pkg/api"
 	driver "github.com/go-sql-driver/mysql"
-	"gorm.io/driver/mysql"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -126,45 +125,93 @@ func propagateDbInfoToSqlDB(db *gorm.DB) {
 	if sqlDB.Endpoint != "" {
 		return
 	}
-	switch d := db.Config.Dialector.(type) {
-	case *mysql.Dialector:
-		cfg, parseErr := driver.ParseDSN(d.Config.DSN)
+	dsn, driverName, dbSystem := extractDialectorInfo(db.Config.Dialector)
+	if dsn == "" {
+		return
+	}
+	switch dbSystem {
+	case "postgres":
+		if driverName == "" {
+			driverName = "pgx"
+		}
+		_, addr, _ := parsePostgresDSN(dsn)
+		sqlDB.Endpoint = addr
+		sqlDB.DriverName = driverName
+		sqlDB.DSN = dsn
+	case "mysql":
+		cfg, parseErr := driver.ParseDSN(dsn)
 		if parseErr != nil {
 			return
 		}
 		sqlDB.Endpoint = cfg.Addr
 		sqlDB.DriverName = "mysql"
-		sqlDB.DSN = d.Config.DSN
-	case *postgres.Dialector:
-		_, addr, _ := parsePostgresDSN(d.Config.DSN)
-		driverName := d.Config.DriverName
-		if driverName == "" {
-			driverName = "pgx"
-		}
-		sqlDB.Endpoint = addr
-		sqlDB.DriverName = driverName
-		sqlDB.DSN = d.Config.DSN
+		sqlDB.DSN = dsn
 	}
 }
 
 func getDbInfo(dial gorm.Dialector) (string, string, string, string) {
-	switch d := dial.(type) {
-	case *mysql.Dialector:
-		if cfg, ok := d.Config.DbInfo.(*driver.Config); ok {
-			return cfg.DBName, cfg.Addr, "mysql", cfg.User
-		}
-		cfg, err := driver.ParseDSN(d.Config.DSN)
+	dsn, _, dbSystem := extractDialectorInfo(dial)
+	if dsn == "" {
+		return "", "", "", ""
+	}
+	switch dbSystem {
+	case "postgres":
+		dbName, addr, user := parsePostgresDSN(dsn)
+		return dbName, addr, "postgresql", user
+	case "mysql":
+		cfg, err := driver.ParseDSN(dsn)
 		if err != nil {
 			return "", "", "", ""
 		}
-		d.Config.DbInfo = cfg
 		return cfg.DBName, cfg.Addr, "mysql", cfg.User
-	case *postgres.Dialector:
-		dbName, addr, user := parsePostgresDSN(d.Config.DSN)
-		return dbName, addr, "postgresql", user
 	default:
 		return "", "", "", ""
 	}
+}
+
+// extractDialectorInfo uses reflection to extract DSN, DriverName, and the
+// database system kind from any GORM dialector without importing the concrete
+// driver packages. This avoids type-assertion failures caused by version
+// mismatches between the instrumentation module and the user's dependencies.
+func extractDialectorInfo(dial gorm.Dialector) (dsn, driverName, dbSystem string) {
+	if dial == nil {
+		return
+	}
+
+	// Identify the database system from the concrete type name,
+	// e.g. "*postgres.Dialector" or "*mysql.Dialector".
+	typeName := reflect.TypeOf(dial).String()
+	switch {
+	case strings.Contains(typeName, "postgres"):
+		dbSystem = "postgres"
+	case strings.Contains(typeName, "mysql"):
+		dbSystem = "mysql"
+	default:
+		return
+	}
+
+	// Navigate: Dialector → embedded *Config → DSN / DriverName fields.
+	v := reflect.ValueOf(dial)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	configField := v.FieldByName("Config")
+	if !configField.IsValid() {
+		return
+	}
+	if configField.Kind() == reflect.Ptr {
+		if configField.IsNil() {
+			return
+		}
+		configField = configField.Elem()
+	}
+	if dsnField := configField.FieldByName("DSN"); dsnField.IsValid() && dsnField.Kind() == reflect.String {
+		dsn = dsnField.String()
+	}
+	if dnField := configField.FieldByName("DriverName"); dnField.IsValid() && dnField.Kind() == reflect.String {
+		driverName = dnField.String()
+	}
+	return
 }
 
 func parsePostgresDSN(dsn string) (dbName, addr, user string) {
