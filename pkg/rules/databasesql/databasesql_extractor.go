@@ -72,6 +72,7 @@ func getParams(sql string) []any {
 // identifiers so the MySQL-oriented sqlparser can handle them. It also strips
 // schema qualifiers (e.g. "core"."user_contacts" → `user_contacts`).
 var pgPlaceholderRegex = regexp.MustCompile(`\$\d+`)
+var pgReturningRegex = regexp.MustCompile(`(?i)\s+RETURNING\s+.*$`)
 
 func normalizeQuery(query string) string {
 	// Replace double-quoted tokens with backtick-quoted equivalents.
@@ -80,6 +81,9 @@ func normalizeQuery(query string) string {
 	// Replace PostgreSQL $N parameter placeholders with ? so the MySQL-oriented
 	// sqlparser can handle them.
 	result = pgPlaceholderRegex.ReplaceAllString(result, "?")
+	// Strip PostgreSQL RETURNING clause which is not valid MySQL syntax and
+	// causes sqlparser.Parse() to fail (e.g. INSERT ... RETURNING "col").
+	result = pgReturningRegex.ReplaceAllString(result, "")
 	return result
 }
 
