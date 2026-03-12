@@ -38,6 +38,11 @@ import (
 	callbacksutils "github.com/cloudwego/eino/utils/callbacks"
 )
 
+// streamDrainTimeout is the maximum time to wait for a stream to be fully
+// consumed before forcibly ending the span. This prevents goroutine leaks
+// when a stream producer stalls or disappears.
+const streamDrainTimeout = 5 * time.Minute
+
 var (
 	einoLLMInstrument    = BuildEinoLLMInstrumenter()
 	einoCommonInstrument = BuildEinoCommonInstrumenter()
@@ -95,6 +100,8 @@ func einoModelCallHandler(config ChatModelConfig) *callbacksutils.ModelCallbackH
 			request := ctx.Value(llmRequestKey{}).(einoLLMRequest)
 			response := einoLLMResponse{}
 			go func() {
+				streamCtx, cancel := context.WithTimeout(context.Background(), streamDrainTimeout)
+				defer cancel()
 				defer func() {
 					err := recover()
 					if err != nil {
@@ -105,15 +112,23 @@ func einoModelCallHandler(config ChatModelConfig) *callbacksutils.ModelCallbackH
 				firstTokenTime := time.Now()
 				var outs []*model.CallbackOutput
 				for {
+					select {
+					case <-streamCtx.Done():
+						log.Printf("stream drain timeout exceeded, ending span: runinfo: %+v", runInfo)
+						goto done
+					default:
+					}
 					chunk, err := output.Recv()
 					if err == io.EOF {
 						break
 					}
 					if err != nil {
 						log.Printf("read stream output error: %v, runinfo: %+v", err, runInfo)
+						break
 					}
 					outs = append(outs, chunk)
 				}
+			done:
 
 				var usage *model.TokenUsage
 				var mas []*schema.Message
@@ -378,6 +393,8 @@ func einoToolCallbackHandler() *callbacksutils.ToolCallbackHandler {
 				output:        make(map[string]any),
 			}
 			go func() {
+				streamCtx, cancel := context.WithTimeout(context.Background(), streamDrainTimeout)
+				defer cancel()
 				defer func() {
 					err := recover()
 					if err != nil {
@@ -387,15 +404,23 @@ func einoToolCallbackHandler() *callbacksutils.ToolCallbackHandler {
 				}()
 				var outs []*tool.CallbackOutput
 				for {
+					select {
+					case <-streamCtx.Done():
+						log.Printf("stream drain timeout exceeded, ending span: runinfo: %+v", info)
+						goto done
+					default:
+					}
 					chunk, err := output.Recv()
 					if err == io.EOF {
 						break
 					}
 					if err != nil {
 						log.Printf("read stream output error: %v, runinfo: %+v", err, info)
+						break
 					}
 					outs = append(outs, chunk)
 				}
+			done:
 				toolResp := ""
 				for _, out := range outs {
 					if out == nil {
@@ -468,6 +493,8 @@ func einoToolsNodeCallbackHandler() *callbacksutils.ToolsNodeCallbackHandlers {
 				output:        make(map[string]any),
 			}
 			go func() {
+				streamCtx, cancel := context.WithTimeout(context.Background(), streamDrainTimeout)
+				defer cancel()
 				defer func() {
 					err := recover()
 					if err != nil {
@@ -477,15 +504,23 @@ func einoToolsNodeCallbackHandler() *callbacksutils.ToolsNodeCallbackHandlers {
 				}()
 				var outs []*schema.Message
 				for {
+					select {
+					case <-streamCtx.Done():
+						log.Printf("stream drain timeout exceeded, ending span: runinfo: %+v", info)
+						goto done
+					default:
+					}
 					chunk, err := output.Recv()
 					if err == io.EOF {
 						break
 					}
 					if err != nil {
 						log.Printf("read stream output error: %v, runinfo: %+v", err, info)
+						break
 					}
 					outs = append(outs, chunk...)
 				}
+			done:
 				for i, msg := range outs {
 					response.output[fmt.Sprintf("%d.role", i)] = msg.Role
 					response.output[fmt.Sprintf("%d.content", i)] = msg.Content

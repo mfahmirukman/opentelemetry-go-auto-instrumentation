@@ -126,16 +126,18 @@ type BudgetTracker struct {
 	startTime     time.Time
 	lastReset     time.Time
 	currentStatus BudgetStatus
-	
+
 	slidingWindow []costDataPoint
 	windowStart   time.Time
-	
+
 	costHistory   []float64
 	movingAverage float64
 	stdDeviation  float64
-	
+
 	anomalyCount  int
 	lastAnomaly   *time.Time
+
+	stopCh        chan struct{}
 }
 
 type costDataPoint struct {
@@ -252,9 +254,10 @@ func init() {
 		startTime:     time.Now(),
 		lastReset:     time.Now(),
 		currentStatus: BudgetOK,
-		slidingWindow: make([]costDataPoint, 0),
+		slidingWindow: make([]costDataPoint, 0, 64),
 		windowStart:   time.Now(),
 		costHistory:   make([]float64, 0, 100),
+		stopCh:        make(chan struct{}),
 	}
 	
 	if config.Period != "" {
@@ -637,20 +640,27 @@ func (bt *BudgetTracker) RecordCost(cost float64) BudgetStatus {
 	return bt.currentStatus
 }
 
+const maxSlidingWindowSize = 10000
+
 func (bt *BudgetTracker) updateSlidingWindow(cost float64) {
 	now := time.Now()
-	
+
 	bt.slidingWindow = append(bt.slidingWindow, costDataPoint{
 		timestamp: now,
 		cost:      cost,
 	})
-	
+
 	cutoff := now.Add(-bt.config.WindowSize)
 	i := 0
 	for i < len(bt.slidingWindow) && bt.slidingWindow[i].timestamp.Before(cutoff) {
 		i++
 	}
 	bt.slidingWindow = bt.slidingWindow[i:]
+
+	// Hard cap to prevent unbounded growth under high throughput with long window sizes
+	if len(bt.slidingWindow) > maxSlidingWindowSize {
+		bt.slidingWindow = bt.slidingWindow[len(bt.slidingWindow)-maxSlidingWindowSize:]
+	}
 }
 
 func (bt *BudgetTracker) updateCostHistory(cost float64) {
@@ -746,8 +756,24 @@ func (bt *BudgetTracker) ResetBudget() {
 
 func (bt *BudgetTracker) startPeriodicReset(period BudgetPeriod) {
 	ticker := bt.getResetTicker(period)
-	for range ticker.C {
-		bt.ResetBudget()
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			bt.ResetBudget()
+		case <-bt.stopCh:
+			return
+		}
+	}
+}
+
+// Stop terminates the periodic reset goroutine.
+func (bt *BudgetTracker) Stop() {
+	select {
+	case <-bt.stopCh:
+		// already closed
+	default:
+		close(bt.stopCh)
 	}
 }
 

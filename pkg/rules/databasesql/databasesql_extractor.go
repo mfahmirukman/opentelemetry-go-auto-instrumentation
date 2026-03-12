@@ -25,7 +25,14 @@ import (
 func extractSQLMetadata(request databaseSqlRequest) {
 	sql := request.sql
 
-	if sqlCache.Contains(sql) {
+	if meta, found := sqlCache.Get(sql); found {
+		// Cache entry may have been created by getCollection() during span
+		// name extraction, which doesn't have the operation type. Update it
+		// if the operation is missing.
+		if meta.operation == "" && request.opType != "" {
+			meta.operation = request.opType
+			sqlCache.Add(sql, meta)
+		}
 		return
 	}
 
@@ -43,8 +50,17 @@ func getCollection(sql string) string {
 	if meta, found := sqlCache.Get(sql); found {
 		return meta.collection
 	}
-	// Attempt to retrieve the collection again.
-	return extractCollection(sql)
+	// Cache miss — parse once and store the result so subsequent calls
+	// (e.g. from DbClientAttrsExtractor.OnEnd) get a cache hit instead of
+	// re-parsing the SQL. This fixes the double-parse issue where
+	// DBSpanNameExtractor.Extract in doStart parsed without caching, and
+	// extractSQLMetadata in doEnd parsed again.
+	collection := extractCollection(sql)
+	sqlCache.Add(sql, SQLMeta{
+		stmt:       sql,
+		collection: collection,
+	})
+	return collection
 }
 
 func getParams(sql string) []any {
