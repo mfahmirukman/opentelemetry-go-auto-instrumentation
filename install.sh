@@ -27,7 +27,7 @@ detect() {
 }
 
 download() {
-    DOWNLOAD_URL="https://github.com/urbanindo/opentelemetry-go-auto-instrumentation/releases/download/v0.1.6/otel-${CURRENT_OS}-${CURRENT_ARCH}"
+    DOWNLOAD_URL="https://github.com/urbanindo/opentelemetry-go-auto-instrumentation/releases/download/v0.1.15/otel-${CURRENT_OS}-${CURRENT_ARCH}"
     EXECUTABLE="otel"
 
     echo "Downloading from $DOWNLOAD_URL"

@@ -1,6 +1,6 @@
 module github.com/alibaba/loongsuite-go-agent
 
-go 1.24.0
+go 1.26.0
 
 require (
 	github.com/dave/dst v0.27.3

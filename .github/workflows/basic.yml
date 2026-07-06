@@ -35,6 +35,7 @@ jobs:
         go_version:
           - 1.24
           - 1.25
+          - 1.26
         os:
           - ubuntu-latest
           - windows-latest
