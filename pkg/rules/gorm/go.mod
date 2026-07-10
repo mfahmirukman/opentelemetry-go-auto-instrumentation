@@ -8,7 +8,7 @@ require (
 	github.com/alibaba/loongsuite-go-agent/pkg v0.0.0-00010101000000-000000000000
 	github.com/go-sql-driver/mysql v1.9.3
 	go.opentelemetry.io/otel/sdk v1.40.0
-	gorm.io/gorm v1.31.1
+	gorm.io/gorm v1.31.2
 )
 
 require (

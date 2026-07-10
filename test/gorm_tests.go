@@ -47,7 +47,7 @@ func TestGormCrud1220(t *testing.T, env ...string) {
 
 func TestGormCrud1311(t *testing.T, env ...string) {
 	_, mysqlPort := init8xMySqlContainer()
-	UseApp("gorm/v1.31.1")
+	UseApp("gorm/v1.31.2")
 	RunGoBuild(t, "go", "build", "test_gorm_crud.go")
 	env = append(env, "MYSQL_PORT="+mysqlPort.Port())
 	RunApp(t, "test_gorm_crud", env...)
