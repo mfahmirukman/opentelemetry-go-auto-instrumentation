@@ -25,8 +25,8 @@ func init() {
 	TestCases = append(TestCases, NewGeneralTestCase("gorm_crud_test", gorm_module_name, "v1.23.0", "v1.24.6", "1.18", "", TestGormCrud1231),
 		NewLatestDepthTestCase("gorm_latestdepth_test", gorm_dependency_name, gorm_module_name, "v1.23.0", "v1.24.6", "1.18", "", TestGormCrud1231),
 		NewGeneralTestCase("gorm_crud_test", gorm_module_name, "v1.22.0", "v1.23.0", "1.18", "", TestGormCrud1220),
-		NewGeneralTestCase("gorm_crud_v1311_test", gorm_module_name, "v1.25.0", "v1.32.0", "1.18", "", TestGormCrud1311),
-		NewLatestDepthTestCase("gorm_latestdepth_v1311_test", gorm_dependency_name, gorm_module_name, "v1.25.0", "v1.32.0", "1.18", "", TestGormCrud1311))
+		NewGeneralTestCase("gorm_crud_v1312_test", gorm_module_name, "v1.25.0", "v1.32.0", "1.18", "", TestGormCrud1312),
+		NewLatestDepthTestCase("gorm_latestdepth_v1312_test", gorm_dependency_name, gorm_module_name, "v1.25.0", "v1.32.0", "1.18", "", TestGormCrud1312))
 }
 
 func TestGormCrud1231(t *testing.T, env ...string) {
@@ -45,7 +45,7 @@ func TestGormCrud1220(t *testing.T, env ...string) {
 	RunApp(t, "test_gorm_crud", env...)
 }
 
-func TestGormCrud1311(t *testing.T, env ...string) {
+func TestGormCrud1312(t *testing.T, env ...string) {
 	_, mysqlPort := init8xMySqlContainer()
 	UseApp("gorm/v1.31.2")
 	RunGoBuild(t, "go", "build", "test_gorm_crud.go")
