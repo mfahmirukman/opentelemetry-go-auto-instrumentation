@@ -17,7 +17,7 @@
 | gocql               | https://github.com/gocql/gocql                              | v1.3.0      | -           |
 | gopg                | https://github.com/go-pg/pg                                 | v10.10.0    | v10.14.0    |
 | gorestful/v3        | https://github.com/emicklei/go-restful/v3                   | v3.7.0      | v3.12.1     |
-| gorm                | https://github.com/go-gorm/gorm                             | v1.22.0     | v1.31.1     |
+| gorm                | https://github.com/go-gorm/gorm                             | v1.22.0     | v1.31.2     |
 | gorilla/mux         | https://github.com/gorilla/mux                              | v1.3.0      | v1.8.1      |
 | grpc                | https://google.golang.org/grpc                              | v1.44.0     | -           |
 | hertz               | https://github.com/cloudwego/hertz                          | v0.8.0      | -           |

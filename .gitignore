@@ -31,6 +31,7 @@ example/demo/demo
 test/zap/test_zap
 test/gorm/v1.22.0/test_gorm_crud
 test/gorm/v1.23.1/test_gorm_crud
+test/gorm/v1.31.2/test_gorm_crud
 test/golog/test_glog
 test/grpc/v1.77.0/test_grpc_basic
 test/fasthttp/v1.45.0/test_basic_http
@@ -137,3 +138,5 @@ docs/.vitepress/cache
 test/build/go.work.sum
 test/dubbo/v3.3.0/test_dubbo_basictest.test
 test/dubbo/v3.3.0/test_dubbo_basic
+test/dubbo/v3.3.0/test_dubbo_error
+test/dubbo/v3.3.0/test_dubbo_metrics
